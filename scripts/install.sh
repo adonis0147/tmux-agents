@@ -10,8 +10,8 @@ main() {
     fi
 
     root=$(CDPATH='' cd -- "$(dirname -- "${0}")/.." && pwd)
-    version=$(awk -F '"' '/^version = / { print $2; exit }' "${root}/Cargo.toml")
-    printf '%s\n' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$' || fail 'invalid release version in Cargo.toml'
+    tag=$(awk 'NR == 1 { tag = $0 } END { if (NR == 1) print tag; else exit 1 }' "${root}/RELEASE_TAG") || fail 'RELEASE_TAG must contain exactly one line'
+    printf '%s\n' "${tag}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$' || fail 'invalid release tag in RELEASE_TAG'
     os=$(uname -s)
     arch=$(uname -m)
     case "${os}:${arch}" in
@@ -21,7 +21,7 @@ main() {
         Linux:aarch64|Linux:arm64) target=aarch64-unknown-linux-musl ;;
         *) fail "unsupported platform: ${os} ${arch}; build from source and set TMUX_AGENTS_BIN" ;;
     esac
-    directory="${root}/bin/${version}/${target}"
+    directory="${root}/bin/${tag}/${target}"
     binary="${directory}/tmux-agents"
     if [ -f "${binary}" ] && [ -x "${binary}" ] && [ ! -L "${binary}" ]; then
         printf '%s\n' "${binary}"
@@ -42,9 +42,9 @@ main() {
     temporary=$(mktemp -d "${directory}/.install.XXXXXX")
     trap 'rm -rf -- "${temporary}"' EXIT
     trap 'exit 1' HUP INT TERM
-    asset="tmux-agents-v${version}-${target}"
-    url="https://github.com/adonis0147/tmux-agents/releases/download/v${version}/${asset}"
-    printf 'tmux-agents: installing v%s for %s\n' "${version}" "${target}" >&2
+    asset="tmux-agents-${tag}-${target}"
+    url="https://github.com/adonis0147/tmux-agents/releases/download/${tag}/${asset}"
+    printf 'tmux-agents: installing %s for %s\n' "${tag}" "${target}" >&2
     download "${url}.sha256" "${temporary}/checksum" 1024
     expected=$(awk -v asset="${asset}" 'NR == 1 && NF == 2 && $2 == asset && length($1) == 64 && $1 !~ /[^0-9a-f]/ { hash = $1 } END { if (NR == 1 && hash != "") print hash; else exit 1 }' "${temporary}/checksum") || fail 'invalid release checksum file'
     download "${url}" "${temporary}/tmux-agents" 52428800

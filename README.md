@@ -26,9 +26,9 @@ For an already running local server, load it with:
 tmux run-shell "${HOME}/.tmux/plugins/tmux-agents/tmux-agents.tmux"
 ```
 
-On loading, the plugin automatically installs the release matching `Cargo.toml` for macOS or Linux on x86_64 or aarch64. Downloads require `curl` and either `sha256sum` or `shasum`; an existing installed executable works offline. No Rust, sudo, or PATH installation is needed. Loading the plugin does not start the supervisor or install tmux.
+On loading, the plugin automatically installs the exact release tag in the root `RELEASE_TAG` file (currently `pre-0.1`) for macOS or Linux on x86_64 or aarch64. Downloads require `curl` and either `sha256sum` or `shasum`; an existing installed executable works offline. No Rust, sudo, or PATH installation is needed. Loading the plugin does not start the supervisor or install tmux.
 
-**The matching `v0.1.0` GitHub release must be published before automatic installation works.** A branch ahead of its release may fail to install; use a tag matching `Cargo.toml` or the [source/offline override](docs/releases.md#source-builds-and-offline-overrides). See [installation and releases](docs/releases.md) for supported targets, diagnostics, upgrades, and publishing.
+**The exact `pre-0.1` GitHub release must be published before automatic installation works.** A checkout whose `RELEASE_TAG` is not yet published may fail to install; use a checkout pointing to a published release or the [source/offline override](docs/releases.md#source-builds-and-offline-overrides). See [installation and releases](docs/releases.md) for supported targets, diagnostics, upgrades, and publishing.
 
 `TMUX_AGENTS_HOME` selects an absolute, private state directory; its default is `$HOME/.local/state/tmux-agents`.
 

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'pre-*'
 
 permissions:
   contents: read
@@ -30,11 +31,11 @@ jobs:
       TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate release version
+      - name: Validate release tag
         shell: bash
         run: |
-          version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)
-          test "${GITHUB_REF_NAME}" = "v${version}"
+          IFS= read -r tag < RELEASE_TAG
+          test "${GITHUB_REF_NAME}" = "${tag}"
       - name: Install Rust target
         run: rustup toolchain install stable --profile minimal --target "${TARGET}"
       - uses: actions/setup-python@v5
@@ -87,4 +88,10 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes
+        shell: bash
+        run: |
+          flags=(--verify-tag --title "${GITHUB_REF_NAME}" --generate-notes)
+          case "${GITHUB_REF_NAME}" in
+            pre-*|v*-*) flags+=(--prerelease --latest=false) ;;
+          esac
+          gh release create "${GITHUB_REF_NAME}" dist/* "${flags[@]}"

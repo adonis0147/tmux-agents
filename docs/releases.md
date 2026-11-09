@@ -9,9 +9,11 @@ Clone into `~/.tmux/plugins/tmux-agents` and load `tmux-agents.tmux`, either dir
 The installer resolves the binary in this order:
 
 1. If `TMUX_AGENTS_BIN` is nonempty, require it to be an absolute path to an executable file and return that path without downloading. An invalid override is an error, not a fallback to a release.
-2. Read the package version from `Cargo.toml` and select a target using `uname`.
-3. Reuse an existing executable at `<plugin>/bin/<version>/<target>/tmux-agents`, including offline. It is not refreshed or replaced on subsequent loads.
-4. Otherwise download the exact version's raw binary and checksum, verify them, and install locally.
+2. Read the exact release tag from the root `RELEASE_TAG` file and select a target using `uname`. The file must contain exactly one line matching `[A-Za-z0-9][A-Za-z0-9._-]*`.
+3. Reuse an existing executable at `<plugin>/bin/<tag>/<target>/tmux-agents`, including offline. It is not refreshed or replaced on subsequent loads.
+4. Otherwise download the exact tag's raw binary and checksum, verify them, and install locally.
+
+The current release tag is exactly `pre-0.1`. The Cargo package version remains `0.1.0` independently; the installer does not use it for release identification.
 
 Supported release targets:
 
@@ -26,22 +28,22 @@ Linux releases use `cargo-zigbuild` with Zig's musl toolchain for both architect
 
 ### Downloads and verification
 
-A fresh download requires `curl` plus either `sha256sum` or `shasum`. For package version `${version}` and selected `${target}`, the assets are:
+A fresh download requires `curl` plus either `sha256sum` or `shasum`. For the exact `${tag}` from `RELEASE_TAG` and selected `${target}`, the assets are (no `v` prefix is inserted):
 
 ```text
-https://github.com/adonis0147/tmux-agents/releases/download/v${version}/tmux-agents-v${version}-${target}
-https://github.com/adonis0147/tmux-agents/releases/download/v${version}/tmux-agents-v${version}-${target}.sha256
+https://github.com/adonis0147/tmux-agents/releases/download/${tag}/tmux-agents-${tag}-${target}
+https://github.com/adonis0147/tmux-agents/releases/download/${tag}/tmux-agents-${tag}-${target}.sha256
 ```
 
 These are raw executables, not archives. Downloads and redirects are HTTPS-only. The installer validates the checksum file's expected filename and 64-character hexadecimal hash, then compares the binary's SHA-256 digest. Checksums protect integrity, not independent authenticity: the binary and checksum share the same GitHub/repository trust boundary.
 
-Downloads are staged under `<plugin>/bin/<version>/<target>/.install.XXXXXX`. Only after successful verification is the executable atomically renamed to `<plugin>/bin/<version>/<target>/tmux-agents`. Concurrent installs may download duplicate verified bytes; publishing them by atomic rename is safe. Existing installed executables are reused rather than routinely replaced or revalidated.
+Downloads are staged under `<plugin>/bin/<tag>/<target>/.install.XXXXXX`. Only after successful verification is the executable atomically renamed to `<plugin>/bin/<tag>/<target>/tmux-agents`. Concurrent installs may download duplicate verified bytes; publishing them by atomic rename is safe. Existing installed executables are reused rather than routinely replaced or revalidated.
 
 The installer prints only the resolved binary path to stdout; progress and diagnostics go to stderr. It never fetches “latest” and performs no background upgrades.
 
 ### Failures and diagnostics
 
-**A matching `v0.1.0` release must exist before automatic installation of the current package works.** A checkout on a branch ahead of the published release may request assets that do not exist. Use a tag whose version matches `Cargo.toml`, or use a source-build override.
+**The exact `pre-0.1` release must exist before automatic installation of the current checkout works.** A checkout whose `RELEASE_TAG` is not yet published may request assets that do not exist. Use a checkout whose `RELEASE_TAG` names a published release, or use a source-build override.
 
 If installation fails, the plugin reports the failure and exits before registering bindings or the `tmux machine` alias. Correct the problem and reload the plugin to retry. To see installer diagnostics directly:
 
@@ -95,15 +97,15 @@ Prerequisites:
 
 - Keep `adonis0147/tmux-agents` public and enable GitHub Actions.
 - Allow the publish job's `contents: write` permission. Publishing uses the standard GitHub token (`github.token`), not a separately configured secret.
-- Ensure the tag is exactly `vVERSION`, where `VERSION` matches `[package].version` in `Cargo.toml`. There is no separate `VERSION` file.
+- Set the root `RELEASE_TAG` file to the intended exact tag. The workflow triggers on `pre-*` and `v*` tags and requires `GITHUB_REF_NAME` to equal `RELEASE_TAG` exactly; tags are not derived from the Cargo package version.
 
-The current checkout has no Git remote configured. If `origin` is still absent, set it before pushing:
+Ensure `origin` points to the public repository. If it is absent, configure it before pushing:
 
 ```sh
 git remote add origin https://github.com/adonis0147/tmux-agents.git
 ```
 
-For the initial `0.1.0` release, after committing and pushing the intended source and workflow:
+For the initial `pre-0.1` release, after committing the intended source and workflow with `RELEASE_TAG` containing `pre-0.1`:
 
 ```sh
 cargo test
@@ -111,16 +113,16 @@ cargo build --release
 python3 tests/installer.py -v
 python3 tests/integration.py -v
 git push -u origin HEAD
-git tag v0.1.0
-git push origin v0.1.0
+git tag pre-0.1
+git push origin pre-0.1
 ```
 
-The workflow validates the tag against `Cargo.toml`, runs Rust unit tests (`cargo test --locked`) and offline installer tests on each runner, and builds release binaries for every target. Cross-compiled binaries are not runtime-tested by this workflow; the full tmux integration suite is a separate local check. Each build packages `tmux-agents-vVERSION-TARGET` plus a `.sha256` file containing the hash and asset filename.
+The workflow validates the tag against `RELEASE_TAG`, runs Rust unit tests (`cargo test --locked`) and offline installer tests on each runner, and builds release binaries for every target. Cross-compiled binaries are not runtime-tested by this workflow; the full tmux integration suite is a separate local check. Each build packages `tmux-agents-${tag}-${target}` plus a `.sha256` file containing the hash and asset filename.
 
-Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Check the Actions run and published assets before directing users to install. This documentation does not imply that the workflow has run successfully on GitHub: both Linux musl targets have been cross-built locally on macOS with Zig and confirmed as statically linked ELF executables; Linux runtime testing and the full GitHub release workflow remain pending.
+Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Tags matching `pre-*` or `v*-*` publish with `--prerelease --latest=false`; stable `v*` releases use standard publishing. Check the Actions run and published assets before directing users to install. This documentation does not imply that the workflow has run successfully on GitHub: both Linux musl targets have been cross-built locally on macOS with Zig and confirmed as statically linked ELF executables; Linux runtime testing and the full GitHub release workflow remain pending.
 
 ## Upgrades and release immutability
 
-Treat published releases as immutable: do not replace binaries or move released tags. For future releases, bump the package version in both `Cargo.toml` and `Cargo.lock`, commit the changes, and push the corresponding new `vVERSION` tag. The installer pins to the checkout's package version, not the newest GitHub release. Update the plugin checkout and reload it to install that version.
+Treat published releases as immutable: do not replace binaries or move released tags. For future releases, update `RELEASE_TAG` to a new `pre-*` or `v*` tag, commit the changes, and push that exact tag. Optionally bump the semantic package version in both `Cargo.toml` and `Cargo.lock` when appropriate; release tags need not equal `v` plus that version. The installer pins to the checkout's `RELEASE_TAG`, not the newest GitHub release. Update the plugin checkout and reload it to install that release.
 
 Installation never restarts a running supervisor. A newer CLI does not automatically replace the service; protocol upgrades and any required migration are manual. See [lifecycle and limits](prototype.md#lifecycle-and-limits) before planning an upgrade.

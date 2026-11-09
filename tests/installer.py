@@ -19,12 +19,12 @@ class Installer(unittest.TestCase):
         (self.root / "scripts").mkdir()
         shutil.copyfile(ROOT / "scripts/install.sh", self.root / "scripts/install.sh")
         shutil.copyfile(ROOT / "tmux-agents.tmux", self.root / "tmux-agents.tmux")
-        (self.root / "Cargo.toml").write_text('[package]\nversion = "0.1.0"\n')
+        (self.root / "RELEASE_TAG").write_text('pre-0.1\n')
         self.payload = b"#!/bin/sh\nprintf 'not launched\\n'\n"
         (self.root / "payload").write_bytes(self.payload)
         self.tools = self.root / "tools"
         self.tools.mkdir()
-        self.env = dict(os.environ, PATH=f"{self.tools}:{os.environ['PATH']}", TEST_ROOT=str(self.root), TEST_OS="Darwin", TEST_ARCH="arm64", EXPECTED_TARGET="aarch64-apple-darwin")
+        self.env = dict(os.environ, PATH=f"{self.tools}:{os.environ['PATH']}", TEST_ROOT=str(self.root), TEST_OS="Darwin", TEST_ARCH="arm64", EXPECTED_TARGET="aarch64-apple-darwin", EXPECTED_TAG="pre-0.1")
         self.env.pop("TMUX_AGENTS_BIN", None)
         self.make_tool("uname", """
 import os, sys
@@ -36,8 +36,9 @@ root = pathlib.Path(os.environ['TEST_ROOT'])
 with (root / 'downloads').open('a') as log:
     log.write(json.dumps(sys.argv[1:]) + '\\n')
 url = sys.argv[-1]
-asset = 'tmux-agents-v0.1.0-' + os.environ['EXPECTED_TARGET']
-base = 'https://github.com/adonis0147/tmux-agents/releases/download/v0.1.0/' + asset
+tag = os.environ['EXPECTED_TAG']
+asset = 'tmux-agents-' + tag + '-' + os.environ['EXPECTED_TARGET']
+base = 'https://github.com/adonis0147/tmux-agents/releases/download/' + tag + '/' + asset
 assert url in [base, base + '.sha256'], url
 assert sys.argv[sys.argv.index('--proto') + 1] == '=https'
 assert sys.argv[sys.argv.index('--proto-redir') + 1] == '=https'
@@ -78,7 +79,7 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
         return subprocess.run(["sh", self.root / "scripts/install.sh"], env=dict(self.env, **environment), capture_output=True, text=True, timeout=10, check=check)
 
     def binary(self, target=None):
-        return self.root / "bin/0.1.0" / (target or self.env["EXPECTED_TARGET"]) / "tmux-agents"
+        return self.root / "bin/pre-0.1" / (target or self.env["EXPECTED_TARGET"]) / "tmux-agents"
 
     def downloads(self):
         path = self.root / "downloads"
@@ -102,6 +103,13 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
                 self.assertEqual(binary.stat().st_mode & 0o777, 0o700)
         self.assertEqual(len(self.downloads()), 8)
         self.assert_no_staging_files()
+
+    def test_v_prefixed_tags_remain_supported(self):
+        (self.root / "RELEASE_TAG").write_text("v0.1.0\n")
+        result = self.install(EXPECTED_TAG="v0.1.0")
+        binary = self.root / "bin/v0.1.0" / self.env["EXPECTED_TARGET"] / "tmux-agents"
+        self.assertEqual(result.stdout.strip(), str(binary))
+        self.assertEqual(binary.read_bytes(), self.payload)
 
     def test_cached_binary_is_reused_offline(self):
         self.install()
@@ -154,12 +162,14 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
         self.assertEqual(result.stdout.strip(), str(self.binary()))
         self.assertEqual(self.binary().read_bytes(), self.payload)
 
-    def test_invalid_version_fails_before_download(self):
-        (self.root / "Cargo.toml").write_text('[package]\nversion = "../../invalid"\n')
-        result = self.install(check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("invalid release version", result.stderr)
-        self.assertEqual(self.downloads(), [])
+    def test_invalid_tag_fails_before_download(self):
+        for tag in ["../../invalid\n", "\n", "pre-0.1\nextra\n", "pre-0.1 with spaces\n"]:
+            with self.subTest(tag=tag):
+                (self.root / "RELEASE_TAG").write_text(tag)
+                result = self.install(check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("RELEASE_TAG", result.stderr)
+                self.assertEqual(self.downloads(), [])
 
     def test_unsupported_platform_fails_before_download(self):
         result = self.install(TEST_OS="FreeBSD", check=False)
