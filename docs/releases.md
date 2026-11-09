@@ -19,7 +19,7 @@ Supported release targets:
 
 | Platform | Architecture | Rust target | Build runner |
 | --- | --- | --- | --- |
-| macOS 10.12+ | x86_64 | `x86_64-apple-darwin` | `macos-15` |
+| macOS 10.12+ | x86_64 | `x86_64-apple-darwin` | `macos-15-intel` |
 | macOS 11.0+ | aarch64 (Apple Silicon) | `aarch64-apple-darwin` | `macos-15` |
 | Linux | x86_64 | `x86_64-unknown-linux-musl` | `ubuntu-24.04` |
 | Linux | aarch64 | `aarch64-unknown-linux-musl` | `ubuntu-24.04` |
@@ -91,7 +91,7 @@ Direct source commands such as `./target/release/tmux-agents supervisor` and `./
 
 ## Publishing a release
 
-The tag workflow is [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds all four targets above, using `macos-15` for both macOS targets (including cross-compilation) with deployment targets `10.12` for Intel and `11.0` for Apple Silicon, matching Herdr TUI v0.9.5's binary minimums. The macOS build step checks the produced Mach-O minimum before packaging. These are deployment targets, not confirmation of runtime testing on those older systems. Both Linux targets build on `ubuntu-24.04` using pinned `cargo-zigbuild` 0.24.1 and Zig 0.15.2 (`ziglang`), with `cargo zigbuild --release --locked --target "${TARGET}"`. No ARM runner or system `musl-tools` package is required.
+The tag workflow is [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds all four targets above, using native `macos-15-intel` and `macos-15` runners for Intel and Apple Silicon respectively with deployment targets `10.12` for Intel and `11.0` for Apple Silicon, matching Herdr TUI v0.9.5's binary minimums. The macOS build step checks the produced Mach-O minimum before packaging. These are deployment targets, not confirmation of runtime testing on those older systems. Both Linux targets build on `ubuntu-24.04` using pinned `cargo-zigbuild` 0.24.1 and Zig 0.15.2 (`ziglang`), with `cargo zigbuild --release --locked --target "${TARGET}"`. No ARM runner or system `musl-tools` package is required.
 
 Prerequisites:
 
