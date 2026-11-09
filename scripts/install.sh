@@ -43,11 +43,18 @@ main() {
     trap 'rm -rf -- "${temporary}"' EXIT
     trap 'exit 1' HUP INT TERM
     asset="tmux-agents-${tag}-${target}"
-    url="https://github.com/adonis0147/tmux-agents/releases/download/${tag}/${asset}"
+    url="https://github.com/adonis0147/tmux-agents/releases/download/${tag}"
     printf 'tmux-agents: installing %s for %s\n' "${tag}" "${target}" >&2
-    download "${url}.sha256" "${temporary}/checksum" 1024
-    expected=$(awk -v asset="${asset}" 'NR == 1 && NF == 2 && $2 == asset && length($1) == 64 && $1 !~ /[^0-9a-f]/ { hash = $1 } END { if (NR == 1 && hash != "") print hash; else exit 1 }' "${temporary}/checksum") || fail 'invalid release checksum file'
-    download "${url}" "${temporary}/tmux-agents" 52428800
+    download "${url}/SHA256SUMS" "${temporary}/checksum" 16384
+    expected=$(awk -v asset="${asset}" '
+        $2 == asset {
+            if (NF != 2 || length($1) != 64 || $1 ~ /[^0-9a-f]/) invalid = 1
+            hash = $1
+            count++
+        }
+        END { if (count == 1 && !invalid) print hash; else exit 1 }
+    ' "${temporary}/checksum") || fail 'invalid or missing entry in release checksum manifest'
+    download "${url}/${asset}" "${temporary}/tmux-agents" 52428800
     if [ "${checksum}" = sha256sum ]; then
         actual=$(sha256sum "${temporary}/tmux-agents" | awk '{ print $1 }')
     else

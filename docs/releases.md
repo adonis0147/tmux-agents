@@ -19,7 +19,7 @@ Supported release targets:
 
 | Platform | Architecture | Rust target | Build runner |
 | --- | --- | --- | --- |
-| macOS 11.0+ | x86_64 | `x86_64-apple-darwin` | `macos-15` |
+| macOS 10.12+ | x86_64 | `x86_64-apple-darwin` | `macos-15` |
 | macOS 11.0+ | aarch64 (Apple Silicon) | `aarch64-apple-darwin` | `macos-15` |
 | Linux | x86_64 | `x86_64-unknown-linux-musl` | `ubuntu-24.04` |
 | Linux | aarch64 | `aarch64-unknown-linux-musl` | `ubuntu-24.04` |
@@ -32,10 +32,10 @@ A fresh download requires `curl` plus either `sha256sum` or `shasum`. For the ex
 
 ```text
 https://github.com/adonis0147/tmux-agents/releases/download/${tag}/tmux-agents-${tag}-${target}
-https://github.com/adonis0147/tmux-agents/releases/download/${tag}/tmux-agents-${tag}-${target}.sha256
+https://github.com/adonis0147/tmux-agents/releases/download/${tag}/SHA256SUMS
 ```
 
-These are raw executables, not archives. Downloads and redirects are HTTPS-only. The installer validates the checksum file's expected filename and 64-character hexadecimal hash, then compares the binary's SHA-256 digest. Checksums protect integrity, not independent authenticity: the binary and checksum share the same GitHub/repository trust boundary.
+These are raw executables, not archives. Downloads and redirects are HTTPS-only. A single `SHA256SUMS` manifest covers all four binaries; there are no per-binary `.sha256` assets. The installer requires exactly one matching filename entry with a valid 64-character hexadecimal hash, then compares the binary's SHA-256 digest. Checksums protect integrity, not independent authenticity: the binary and checksum share the same GitHub/repository trust boundary.
 
 Downloads are staged under `<plugin>/bin/<tag>/<target>/.install.XXXXXX`. Only after successful verification is the executable atomically renamed to `<plugin>/bin/<tag>/<target>/tmux-agents`. Concurrent installs may download duplicate verified bytes; publishing them by atomic rename is safe. Existing installed executables are reused rather than routinely replaced or revalidated.
 
@@ -91,7 +91,7 @@ Direct source commands such as `./target/release/tmux-agents supervisor` and `./
 
 ## Publishing a release
 
-The tag workflow is [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds all four targets above, using `macos-15` for both macOS targets (including cross-compilation) with minimum macOS deployment target `11.0`. Both Linux targets build on `ubuntu-24.04` using pinned `cargo-zigbuild` 0.24.1 and Zig 0.15.2 (`ziglang`), with `cargo zigbuild --release --locked --target "${TARGET}"`. No ARM runner or system `musl-tools` package is required.
+The tag workflow is [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds all four targets above, using `macos-15` for both macOS targets (including cross-compilation) with deployment targets `10.12` for Intel and `11.0` for Apple Silicon, matching Herdr TUI v0.9.5's binary minimums. The macOS build step checks the produced Mach-O minimum before packaging. These are deployment targets, not confirmation of runtime testing on those older systems. Both Linux targets build on `ubuntu-24.04` using pinned `cargo-zigbuild` 0.24.1 and Zig 0.15.2 (`ziglang`), with `cargo zigbuild --release --locked --target "${TARGET}"`. No ARM runner or system `musl-tools` package is required.
 
 Prerequisites:
 
@@ -117,12 +117,14 @@ git tag pre-0.1
 git push origin pre-0.1
 ```
 
-The workflow validates the tag against `RELEASE_TAG`, runs Rust unit tests (`cargo test --locked`) and offline installer tests on each runner, and builds release binaries for every target. Cross-compiled binaries are not runtime-tested by this workflow; the full tmux integration suite is a separate local check. Each build packages `tmux-agents-${tag}-${target}` plus a `.sha256` file containing the hash and asset filename.
+The workflow validates the tag against `RELEASE_TAG`, runs Rust unit tests (`cargo test --locked`) and offline installer tests on each runner, and builds release binaries for every target. Cross-compiled binaries are not runtime-tested by this workflow; the full tmux integration suite is a separate local check. Each build packages only `tmux-agents-${tag}-${target}`. The publish job generates one `SHA256SUMS` manifest covering all four binaries.
 
-Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Tags matching `pre-*` or `v*-*` publish with `--prerelease --latest=false`; stable `v*` releases use standard publishing. Check the Actions run and published assets before directing users to install. This documentation does not imply that the workflow has run successfully on GitHub: both Linux musl targets have been cross-built locally on macOS with Zig and confirmed as statically linked ELF executables; Linux runtime testing and the full GitHub release workflow remain pending.
+Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Tags matching `pre-*` or `v*-*` publish with `--prerelease --latest=false`; stable `v*` releases use standard publishing. Check the Actions run and published assets before directing users to install. The initial `pre-0.1` release workflow passed for all four targets, and its published macOS Intel binary was downloaded, checksum-verified, and executed locally. Linux musl targets were also cross-built locally and confirmed as statically linked ELF executables. Linux runtime testing and testing on the minimum macOS versions remain pending.
 
 ## Upgrades and release immutability
 
 Treat published releases as immutable: do not replace binaries or move released tags. For future releases, update `RELEASE_TAG` to a new `pre-*` or `v*` tag, commit the changes, and push that exact tag. Optionally bump the semantic package version in both `Cargo.toml` and `Cargo.lock` when appropriate; release tags need not equal `v` plus that version. The installer pins to the checkout's `RELEASE_TAG`, not the newest GitHub release. Update the plugin checkout and reload it to install that release.
+
+The `pre-0.1` release is being replaced once at the maintainer's explicit request to align macOS minimums and consolidate checksums. Existing cached executables are not automatically refreshed after an overwrite: remove only `<plugin>/bin/pre-0.1/<target>/tmux-agents` and reload the plugin to download the replacement. Do not remove workspace state.
 
 Installation never restarts a running supervisor. A newer CLI does not automatically replace the service; protocol upgrades and any required migration are manual. See [lifecycle and limits](prototype.md#lifecycle-and-limits) before planning an upgrade.

@@ -2,7 +2,7 @@
 
 ## Scope and components
 
-This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Linux runtime behavior and the GitHub release workflow have not yet been validated here. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
+This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Release builds have passed on GitHub; Linux runtime behavior and the minimum macOS versions (Intel 10.12, Apple Silicon 11.0) remain unverified. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
 
 - **Local plugin (`tmux-agents.tmux`)** exposes `tmux machine` commands and attachment bindings without changing the local tmux prefix.
 - **Short-lived CLI** sends requests to the supervisor over a private Unix socket.

@@ -38,24 +38,28 @@ with (root / 'downloads').open('a') as log:
 url = sys.argv[-1]
 tag = os.environ['EXPECTED_TAG']
 asset = 'tmux-agents-' + tag + '-' + os.environ['EXPECTED_TARGET']
-base = 'https://github.com/adonis0147/tmux-agents/releases/download/' + tag + '/' + asset
-assert url in [base, base + '.sha256'], url
+base = 'https://github.com/adonis0147/tmux-agents/releases/download/' + tag
+assert url in [base + '/' + asset, base + '/SHA256SUMS'], url
 assert sys.argv[sys.argv.index('--proto') + 1] == '=https'
 assert sys.argv[sys.argv.index('--proto-redir') + 1] == '=https'
 output = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])
 time.sleep(float(os.environ.get('TEST_DELAY', '0')))
-if os.environ.get('FAIL_DOWNLOAD') == ('checksum' if url.endswith('.sha256') else 'binary'):
+if os.environ.get('FAIL_DOWNLOAD') == ('checksum' if url.endswith('/SHA256SUMS') else 'binary'):
     output.write_bytes(b'partial download')
     sys.exit(22)
 payload = (root / 'payload').read_bytes()
-if url.endswith('.sha256'):
+if url.endswith('/SHA256SUMS'):
     digest = hashlib.sha256(payload).hexdigest()
     mode = os.environ.get('CHECKSUM_MODE', '')
     if mode == 'mismatch': digest = '0' * 64
-    if mode == 'wrong_name': asset = 'other-file'
-    checksum = digest + '  ' + asset + '\\n'
+    if mode == 'invalid_hash': digest = 'z' * 64
+    if mode == 'short_hash': digest = 'abc'
+    targets = ['x86_64-apple-darwin', 'aarch64-apple-darwin', 'x86_64-unknown-linux-musl', 'aarch64-unknown-linux-musl']
+    names = ['tmux-agents-' + tag + '-' + target for target in targets]
+    if mode == 'wrong_name': names[names.index(asset)] = 'other-file'
+    checksum = ''.join(digest + '  ' + name + '\\n' for name in names)
     if mode == 'malformed': checksum = 'not a checksum\\n'
-    if mode == 'extra_line': checksum += checksum
+    if mode == 'extra_line': checksum += digest + '  ' + asset + '\\n'
     output.write_text(checksum)
 else:
     output.write_bytes(payload)
@@ -144,7 +148,7 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
         self.assert_no_staging_files()
 
     def test_rejects_invalid_checksums(self):
-        for mode in ["mismatch", "wrong_name", "malformed", "extra_line"]:
+        for mode in ["mismatch", "wrong_name", "malformed", "extra_line", "invalid_hash", "short_hash"]:
             with self.subTest(mode=mode):
                 result = self.install(CHECKSUM_MODE=mode, check=False)
                 self.assertNotEqual(result.returncode, 0)

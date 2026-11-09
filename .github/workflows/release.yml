@@ -18,8 +18,10 @@ jobs:
         include:
           - runner: macos-15
             target: x86_64-apple-darwin
+            macos_deployment_target: '10.12'
           - runner: macos-15
             target: aarch64-apple-darwin
+            macos_deployment_target: '11.0'
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
           - runner: ubuntu-24.04
@@ -27,7 +29,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       RUSTUP_TOOLCHAIN: stable
-      MACOSX_DEPLOYMENT_TARGET: '11.0'
       TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v4
@@ -52,22 +53,24 @@ jobs:
       - name: Build Linux with Zig and musl
         if: runner.os == 'Linux'
         run: cargo zigbuild --release --locked --target "${TARGET}"
-      - name: Build macOS
+      - name: Build and verify macOS deployment target
         if: runner.os == 'macOS'
-        run: cargo build --release --locked --target "${TARGET}"
-      - name: Package binary and checksum
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_deployment_target }}
+        run: |
+          cargo build --release --locked --target "${TARGET}"
+          minimum=$(otool -l "target/${TARGET}/release/tmux-agents" | awk '
+            $1 == "cmd" { command = $2 }
+            command == "LC_BUILD_VERSION" && $1 == "minos" { print $2; exit }
+            command == "LC_VERSION_MIN_MACOSX" && $1 == "version" { print $2; exit }
+          ')
+          test "${minimum}" = "${MACOSX_DEPLOYMENT_TARGET}"
+      - name: Package binary
         shell: bash
         run: |
           mkdir -p dist
           asset="tmux-agents-${GITHUB_REF_NAME}-${TARGET}"
           cp "target/${TARGET}/release/tmux-agents" "dist/${asset}"
-          python3 - <<'PY'
-          import hashlib
-          from pathlib import Path
-          for binary in sorted(Path("dist").iterdir()):
-              digest = hashlib.sha256(binary.read_bytes()).hexdigest()
-              binary.with_name(binary.name + ".sha256").write_text(f"{digest}  {binary.name}\n")
-          PY
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
@@ -85,6 +88,17 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Create checksum manifest
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          binaries = sorted(Path("dist").iterdir())
+          with Path("dist/SHA256SUMS").open("w") as manifest:
+              for binary in binaries:
+                  digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+                  manifest.write(f"{digest}  {binary.name}\n")
+          PY
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
