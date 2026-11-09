@@ -2,14 +2,16 @@
 
 ## Scope and components
 
-This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and tmux 3.8 or newer and is tested on macOS with tmux 3.8. See the [README](../README.md) for build and plugin installation.
+This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Linux runtime behavior and the GitHub release workflow have not yet been validated here. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
 
 - **Local plugin (`tmux-agents.tmux`)** exposes `tmux machine` commands and attachment bindings without changing the local tmux prefix.
 - **Short-lived CLI** sends requests to the supervisor over a private Unix socket.
 - **Supervisor** owns workspace operations and persistent metadata.
 - **Managed tmux server** uses a private socket and a dedicated configuration that ignores the user's tmux configuration. Its prefix is `C-a`.
 
-The plugin resolves the executable as `target/release/tmux-agents` under the repository, unless `TMUX_AGENTS_BIN` overrides it. Build it with `cargo build --release`.
+At startup, the plugin runs `sh scripts/install.sh`. An executable-file `TMUX_AGENTS_BIN` override takes precedence; otherwise the installer resolves the version from `Cargo.toml` and platform from `uname`, reuses an existing executable, or downloads and verifies the matching GitHub release into `bin/<version>/<target>/tmux-agents`. Installation failure stops plugin loading before registering bindings or the `tmux machine` alias; reload to retry. Loading the plugin does not start the supervisor.
+
+For source development, run `cargo build --release` and set `TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents` in the tmux server environment before loading the plugin. See [source builds and offline overrides](releases.md#source-builds-and-offline-overrides) for commands. The direct source-build commands below remain valid.
 
 `TMUX_AGENTS_HOME` must be an absolute path to a private state directory. It defaults to `$HOME/.local/state/tmux-agents`. Keep this directory private: its sockets provide access to the supervisor and managed tmux server. Persistent workspace metadata lives in `metadata.json`; workspace IDs remain stable across supervisor restarts. The canonical state-directory path must be UTF-8, contain no control characters, and fit within 85 bytes for portable Unix socket paths. Existing directories must be owned by the current user, have mode `0700`, and not be symlinks.
 
@@ -69,7 +71,7 @@ Responses contain `version`, matching `id`, `result`, and `error` (null on succe
 
 ## Lifecycle and limits
 
-The supervisor and managed tmux server have separate lifetimes. Restarting the supervisor does not kill managed tmux. Persistent IDs and metadata support continued workspace lookup; they are not a promise to recreate every local attachment.
+The supervisor and managed tmux server have separate lifetimes. Restarting the supervisor does not kill managed tmux. Installation never restarts a running supervisor or automatically replaces the service. Protocol upgrades and any required migration remain manual; installing a new CLI does not upgrade an already running supervisor. Persistent IDs and metadata support continued workspace lookup; they are not a promise to recreate every local attachment.
 
 The prototype is limited to 128 workspaces and serves one request at a time, with two-second socket I/O timeouts. Workspace definitions are saved before tmux starts; a launch failure retains a stopped definition. Stopped definitions are listed but cannot yet be restarted or deleted through the plugin. Arbitrary native renaming of managed tmux sessions is not supported.
 

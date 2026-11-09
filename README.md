@@ -2,29 +2,35 @@
 
 A Rust local prototype for managing workspaces in a dedicated tmux server from your existing tmux session. Your local server keeps its configuration; managed workspaces use a separate configuration and `C-a` prefix.
 
-Requires Unix, Rust/Cargo, and **tmux 3.8 or newer**. Tested on macOS with tmux 3.8.
+Requires Unix and **tmux 3.8 or newer**, installed separately. Tested locally on macOS with tmux 3.8; Linux runtime behavior and the GitHub release workflow have not yet been validated here.
 
 ## Get started
 
-Build from the repository root:
+Clone the public repository:
 
 ```sh
-cargo build --release
+git clone https://github.com/adonis0147/tmux-agents.git ~/.tmux/plugins/tmux-agents
 ```
 
-Load the plugin in your local tmux configuration (replace the absolute path):
+Add this to your local `~/.tmux.conf`:
 
 ```tmux
-run-shell '/absolute/repo/tmux-agents.tmux'
+run-shell '~/.tmux/plugins/tmux-agents/tmux-agents.tmux'
 ```
+
+Alternatively, with [TPM](https://github.com/tmux-plugins/tpm), add `set -g @plugin 'adonis0147/tmux-agents'` before TPM's initialization and install plugins normally. The standard `tmux-agents.tmux` entry point is supported.
 
 For an already running local server, load it with:
 
 ```sh
-tmux run-shell '/absolute/repo/tmux-agents.tmux'
+tmux run-shell "${HOME}/.tmux/plugins/tmux-agents/tmux-agents.tmux"
 ```
 
-The plugin uses `target/release/tmux-agents` relative to the repository, unless `TMUX_AGENTS_BIN` overrides it. `TMUX_AGENTS_HOME` selects an absolute, private state directory; its default is `$HOME/.local/state/tmux-agents`.
+On loading, the plugin automatically installs the release matching `Cargo.toml` for macOS or Linux on x86_64 or aarch64. Downloads require `curl` and either `sha256sum` or `shasum`; an existing installed executable works offline. No Rust, sudo, or PATH installation is needed. Loading the plugin does not start the supervisor or install tmux.
+
+**The matching `v0.1.0` GitHub release must be published before automatic installation works.** A branch ahead of its release may fail to install; use a tag matching `Cargo.toml` or the [source/offline override](docs/releases.md#source-builds-and-offline-overrides). See [installation and releases](docs/releases.md) for supported targets, diagnostics, upgrades, and publishing.
+
+`TMUX_AGENTS_HOME` selects an absolute, private state directory; its default is `$HOME/.local/state/tmux-agents`.
 
 From a shell in your local tmux session:
 
@@ -42,11 +48,12 @@ Managed tmux uses `C-a`. While attached to a managed workspace, your local **pre
 
 This is local-only: no SSH, agent execution, uploads, or reboot layout restoration. Restarting the supervisor leaves managed tmux running, but does not promise to recreate local attachments. Destructive workspace commands are intentionally absent.
 
-Run the checks with:
+Run the checks from a source checkout with Rust/Cargo and Python 3 installed:
 
 ```sh
 cargo test
 cargo build --release
+python3 tests/installer.py -v
 python3 tests/integration.py -v
 ```
 

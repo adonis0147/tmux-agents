@@ -7,7 +7,7 @@ usage() { fail 'usage: tmux machine start|status|picker|workspace create NAME [A
 binary=$(tmux show-option -gqv @tmux-agents-bin)
 TMUX_AGENTS_HOME=$(tmux show-option -gqv @tmux-agents-home)
 export TMUX_AGENTS_HOME
-[ -x "${binary}" ] || fail "build the executable first: cargo build --release (${binary})"
+[ -f "${binary}" ] && [ -x "${binary}" ] || fail "executable missing; reload tmux-agents.tmux to install it (${binary})"
 # Alias templates supply empty strings for omitted parameters.
 command=${1:-}
 subcommand=${2:-}
