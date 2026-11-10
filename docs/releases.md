@@ -4,7 +4,7 @@ See the [README](../README.md) for plugin setup and interactive usage. The publi
 
 ## Automatic installation
 
-Clone into `~/.tmux/plugins/tmux-agents` and load `tmux-agents.tmux`, either directly or through TPM with `set -g @plugin 'adonis0147/tmux-agents'`. The standard `.tmux` entry point runs `sh scripts/install.sh` before registering the command alias or bindings.
+Clone into `~/.tmux/plugins/tmux-agents` and load `tmux-agents.tmux`, either directly or through TPM with `set -g @plugin 'adonis0147/tmux-agents'`. The standard `.tmux` entry point runs `bash scripts/install.sh` before registering the command alias or bindings.
 
 The installer resolves the binary in this order:
 
@@ -30,7 +30,7 @@ Explicit `tmux machine add HOST_OR_USER@HOST` also uses these four release targe
 
 ### Downloads and verification
 
-A fresh download requires `curl` plus either `sha256sum` or `shasum`. For the exact `${tag}` from `RELEASE_TAG` and selected `${target}`, the assets are (no `v` prefix is inserted):
+Shell entry points require Bash 3.2 or newer. A fresh download requires `curl` plus either `sha256sum` or `shasum`. For the exact `${tag}` from `RELEASE_TAG` and selected `${target}`, the assets are (no `v` prefix is inserted):
 
 ```text
 https://github.com/adonis0147/tmux-agents/releases/download/${tag}/tmux-agents-${tag}-${target}
@@ -51,7 +51,7 @@ If installation fails, the plugin reports the failure and exits before registeri
 
 ```sh
 cd ~/.tmux/plugins/tmux-agents
-sh scripts/install.sh
+bash scripts/install.sh
 ```
 
 Check the override, platform support, download tools, network access, and presence of the exact release assets. A checksum failure leaves the unverified download uninstalled.
@@ -63,7 +63,7 @@ Build from a source checkout with Rust/Cargo:
 ```sh
 cd /absolute/repo
 cargo build --release
-TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents sh scripts/install.sh
+TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents bash scripts/install.sh
 ```
 
 The override returns the executable path without a download. It can also point to another trusted, locally provisioned executable for offline use.

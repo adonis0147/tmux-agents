@@ -2,7 +2,7 @@
 
 ## Scope and components
 
-This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Release builds have passed on GitHub, and remote installation/startup has been validated on Linux x86_64. Other remote platforms and the minimum macOS versions (Intel 10.12, Apple Silicon 11.0) remain unverified. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
+This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix, Bash 3.2 or newer, and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Release builds have passed on GitHub, and remote installation/startup has been validated on Linux x86_64. Other remote platforms and the minimum macOS versions (Intel 10.12, Apple Silicon 11.0) remain unverified. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
 
 - **Local plugin (`tmux-agents.tmux`)** exposes `tmux machine` commands and attachment bindings without changing the local tmux prefix.
 - **Short-lived CLI** sends requests to the local supervisor over a private Unix socket and maintains the local machine registry.
@@ -10,7 +10,7 @@ This Rust prototype manages local workspaces through an isolated tmux server. It
 - **Supervisor** owns workspace operations and persistent metadata.
 - **Managed tmux server** uses a private socket and a dedicated configuration that ignores the user's tmux configuration. Its prefix is `C-a`.
 
-At startup, the plugin runs `sh scripts/install.sh`. An executable-file `TMUX_AGENTS_BIN` override takes precedence; otherwise the installer reads the exact release tag from the root `RELEASE_TAG` file (currently `pre-0.1`) and platform from `uname`, reuses an existing executable, or downloads and verifies the matching GitHub release into `bin/<tag>/<target>/tmux-agents`. `RELEASE_TAG` must contain exactly one line matching `[A-Za-z0-9][A-Za-z0-9._-]*`; the Cargo package version is independent and does not identify downloads. Installation failure stops plugin loading before registering bindings or the `tmux machine` alias; reload to retry. Loading the plugin does not start the supervisor.
+At startup, the plugin runs `bash scripts/install.sh`. An executable-file `TMUX_AGENTS_BIN` override takes precedence; otherwise the installer reads the exact release tag from the root `RELEASE_TAG` file (currently `pre-0.1`) and platform from `uname`, reuses an existing executable, or downloads and verifies the matching GitHub release into `bin/<tag>/<target>/tmux-agents`. `RELEASE_TAG` must contain exactly one line matching `[A-Za-z0-9][A-Za-z0-9._-]*`; the Cargo package version is independent and does not identify downloads. Installation failure stops plugin loading before registering bindings or the `tmux machine` alias; reload to retry. Loading the plugin does not start the supervisor.
 
 For source development, run `cargo build --release` and set `TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents` in the tmux server environment before loading the plugin. See [source builds and offline overrides](releases.md#source-builds-and-offline-overrides) for commands. The direct source-build commands below remain valid.
 

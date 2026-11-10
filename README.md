@@ -2,7 +2,7 @@
 
 A Rust local prototype for managing workspaces in a dedicated tmux server from your existing tmux session. Your local server keeps its configuration; managed workspaces use a separate configuration and `C-a` prefix.
 
-Requires Unix and **tmux 3.8 or newer**, installed separately. macOS binaries target Intel 10.12+ and Apple Silicon 11.0+. Tested locally on macOS with tmux 3.8 and for remote installation/startup on Linux x86_64 with tmux 3.6. Release builds have passed on GitHub; older macOS runtime behavior remains unverified.
+Requires Unix, **Bash 3.2 or newer**, and **tmux 3.8 or newer**, installed separately. macOS binaries target Intel 10.12+ and Apple Silicon 11.0+. Tested locally on macOS with tmux 3.8 and for remote installation/startup on Linux x86_64 with tmux 3.6. Release builds have passed on GitHub; older macOS runtime behavior remains unverified.
 
 ## Get started
 

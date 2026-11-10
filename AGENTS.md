@@ -6,6 +6,8 @@
 - Keep functions small and focused. Extract meaningful steps when a body becomes hard to follow, not to meet an arbitrary line limit. Avoid helpers that merely add indirection.
 - Organize code from the entry point downward. Place the entry-point or primary orchestration function first in each file or implementation block, then arrange helpers in depth-first call order: a helper and its descendants come before the next sibling helper. Define shared helpers once, where they first belong in that traversal.
 - Comment on intent and constraints that the code cannot express clearly; do not narrate obvious operations.
+- Separate logical steps with blank lines and keep source lines within 120 columns.
+- Use Bash 3.2-compatible syntax for shell scripts and `${...}` for shell parameter expansions.
 
 ## Maintain human-facing documentation
 

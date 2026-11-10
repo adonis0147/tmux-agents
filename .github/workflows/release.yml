@@ -36,6 +36,7 @@ jobs:
         shell: bash
         run: |
           IFS= read -r tag < RELEASE_TAG
+
           test "${GITHUB_REF_NAME}" = "${tag}"
       - name: Install Rust target
         run: rustup toolchain install stable --profile minimal --target "${TARGET}"
@@ -49,6 +50,7 @@ jobs:
       - name: Test
         run: |
           cargo test --locked
+
           python3 tests/installer.py -v
       - name: Build Linux with Zig and musl
         if: runner.os == 'Linux'
@@ -69,6 +71,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
+
           asset="tmux-agents-${GITHUB_REF_NAME}-${TARGET}"
           cp "target/${TARGET}/release/tmux-agents" "dist/${asset}"
       - uses: actions/upload-artifact@v4
@@ -93,7 +96,9 @@ jobs:
           python3 - <<'PY'
           import hashlib
           from pathlib import Path
+
           binaries = sorted(Path("dist").iterdir())
+
           with Path("dist/SHA256SUMS").open("w") as manifest:
               for binary in binaries:
                   digest = hashlib.sha256(binary.read_bytes()).hexdigest()

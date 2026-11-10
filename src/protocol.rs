@@ -29,12 +29,15 @@ pub struct Response {
 pub fn read<T: DeserializeOwned>(reader: &mut impl Read) -> Result<T> {
     let mut header = [0; 4];
     reader.read_exact(&mut header)?;
+
     let size = u32::from_be_bytes(header) as usize;
     if size == 0 || size > MAX_MESSAGE {
         return Err("invalid message size".into());
     }
+
     let mut bytes = vec![0; size];
     reader.read_exact(&mut bytes)?;
+
     Ok(serde_json::from_slice(&bytes)?)
 }
 
@@ -43,9 +46,11 @@ pub fn write(writer: &mut impl Write, message: &impl Serialize) -> Result<()> {
     if bytes.len() > MAX_MESSAGE {
         return Err("message exceeds 64 KiB".into());
     }
+
     writer.write_all(&(bytes.len() as u32).to_be_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()?;
+
     Ok(())
 }
 
@@ -62,8 +67,10 @@ mod tests {
             method: "status".into(),
             args: vec![],
         };
+
         let mut bytes = Vec::new();
         write(&mut bytes, &request).unwrap();
+
         let result: Request = read(&mut Cursor::new(bytes)).unwrap();
         assert_eq!(result.id, "test");
     }

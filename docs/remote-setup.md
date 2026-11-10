@@ -4,7 +4,7 @@
 
 ## Prerequisites and usage
 
-The local client still requires tmux **3.8 or newer**. Build the new local client: the published `pre-0.1` binary lacks the machine registry CLI required by this flow. From your source checkout, update the override in the tmux server **before loading the plugin**:
+The local client requires Bash **3.2 or newer** and tmux **3.8 or newer**. Build the new local client: the published `pre-0.1` binary lacks the machine registry CLI required by this flow. From your source checkout, update the override in the tmux server **before loading the plugin**:
 
 ```sh
 cargo build --release
@@ -15,13 +15,13 @@ tmux machine add user@server
 tmux machine list
 ```
 
-The remote host needs a POSIX shell, tmux **3.2 or newer**, `curl`, `sha256sum` or `shasum`, and access to GitHub release assets. Supported remote releases are the same four [OS/architecture targets](releases.md#automatic-installation) as local installation. tmux must already be installed; setup never uses sudo or upgrades system tmux.
+The remote host needs Bash **3.2 or newer**, tmux **3.2 or newer**, `curl`, `sha256sum` or `shasum`, and access to GitHub release assets. Supported remote releases are the same four [OS/architecture targets](releases.md#automatic-installation) as local installation. tmux must already be installed; setup never uses sudo or upgrades system tmux.
 
 End-to-end setup was validated against a Linux x86_64 server with tmux 3.6: a fresh verified installation, detached supervisor startup, successful registration, and repeated setup retaining the same supervisor PID and instance. The actual `tmux machine add` popup also completed successfully before the confirmation/progress enhancement. The new confirmation, cancellation, progress, and completion pause are covered by offline pseudoterminal tests; the validation server was left uninstalled for manual testing.
 
 ## SSH and authorization
 
-The plugin invokes `scripts/machine-add.sh` in a tmux popup with `-EE`, keeping SSH authentication and host-key prompts visible. It uses native SSH and respects SSH configuration, with `-T` for the non-PTY remote command, `ConnectTimeout=10`, `ServerAliveInterval=15`, and `ServerAliveCountMax=3`. It neither stores credentials nor bypasses host-key verification.
+The plugin invokes `scripts/machine-add.sh` in a tmux popup with `-EE`, keeping SSH authentication and host-key prompts visible. It uses native SSH and respects SSH configuration, with `bash -s` as the non-PTY remote command (`-T`), `ConnectTimeout=10`, `ServerAliveInterval=15`, and `ServerAliveCountMax=3`. It neither stores credentials nor bypasses host-key verification.
 
 Each `machine add` first shows the destination and release and performs a read-only SSH check of prerequisites and the exact managed release/platform binary. If it is already installed, setup continues without an installation prompt. If it is missing, the popup says so and asks `Install it now? [y/N]`. Enter, EOF, or any response other than `y`/`yes` (case-insensitive) cancels without installation, supervisor startup, or machine registration.
 
