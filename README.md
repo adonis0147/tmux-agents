@@ -2,7 +2,7 @@
 
 A Rust local prototype for managing workspaces in a dedicated tmux server from your existing tmux session. Your local server keeps its configuration; managed workspaces use a separate configuration and `C-a` prefix.
 
-Requires Unix and **tmux 3.8 or newer**, installed separately. macOS binaries target Intel 10.12+ and Apple Silicon 11.0+. Tested locally on macOS with tmux 3.8; release builds have passed on GitHub, but older macOS and Linux runtime behavior remain unverified.
+Requires Unix and **tmux 3.8 or newer**, installed separately. macOS binaries target Intel 10.12+ and Apple Silicon 11.0+. Tested locally on macOS with tmux 3.8 and for remote installation/startup on Linux x86_64 with tmux 3.6. Release builds have passed on GitHub; older macOS runtime behavior remains unverified.
 
 ## Get started
 
@@ -46,13 +46,18 @@ The directory is optional when creating a workspace. Open accepts a workspace na
 
 Managed tmux uses `C-a`. While attached to a managed workspace, your local **prefix, then `a`** forwards `C-a` to it; your local prefix itself is unchanged. The plugin replaces existing prefix bindings on `M` and `a`.
 
-This is local-only: no SSH, agent execution, uploads, or reboot layout restoration. Restarting the supervisor leaves managed tmux running, but does not promise to recreate local attachments. Destructive workspace commands are intentionally absent.
+### Explicit remote setup
+
+`tmux machine add HOST_OR_USER@HOST` checks the remote supervisor over SSH, asks for installation approval only if it is missing, and otherwise continues directly with progress displayed; `tmux machine list` lists registrations, not live status. **Build the new local client and update `TMUX_AGENTS_BIN` in the tmux server before loading the plugin**: published `pre-0.1` lacks the required registry CLI. See [remote setup](docs/remote-setup.md) for commands, prerequisites, security, and failure behavior.
+
+Remote setup is not remote workspace UI: all workspace commands, `start`, `status`, and the picker remain local. There is no remote routing, attachment, reconnect, agent execution, uploads, or reboot layout restoration. Restarting the supervisor leaves managed tmux running, but does not promise to recreate local attachments. Destructive workspace commands are intentionally absent.
 
 Run the checks from a source checkout with Rust/Cargo and Python 3 installed:
 
 ```sh
 cargo test
 cargo build --release
+python3 tests/remote.py -v
 python3 tests/installer.py -v
 python3 tests/integration.py -v
 ```

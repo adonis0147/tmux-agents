@@ -115,6 +115,16 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
         self.assertEqual(result.stdout.strip(), str(binary))
         self.assertEqual(binary.read_bytes(), self.payload)
 
+    def test_download_progress_is_opt_in(self):
+        result = self.install(TMUX_AGENTS_INSTALL_PROGRESS="1")
+        self.assertEqual(result.stdout.strip(), str(self.binary()))
+        for message in ["Downloading checksum manifest", "Downloading supervisor binary", "Verifying SHA-256", "Installation complete"]:
+            self.assertIn(message, result.stderr)
+        self.assertTrue(all("--progress-bar" in call and "--silent" not in call for call in self.downloads()))
+        repeated = self.install(TMUX_AGENTS_INSTALL_PROGRESS="1")
+        self.assertIn("no download needed", repeated.stderr)
+        self.assertEqual(len(self.downloads()), 2)
+
     def test_cached_binary_is_reused_offline(self):
         self.install()
         binary = self.binary()
@@ -123,6 +133,7 @@ if sys.argv[1:] == ['-V']: print('tmux 3.8')
         self.assertEqual(result.stdout.strip(), str(binary))
         self.assertEqual(binary.stat().st_mtime_ns, before)
         self.assertEqual(len(self.downloads()), 2)
+        self.assertTrue(all("--silent" in call and "--progress-bar" not in call for call in self.downloads()))
 
     def test_explicit_override_skips_installation(self):
         override = self.root / "custom executable"

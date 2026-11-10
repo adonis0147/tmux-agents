@@ -1,3 +1,4 @@
+mod machine;
 mod protocol;
 mod supervisor;
 
@@ -26,9 +27,10 @@ fn run() -> Result<()> {
     let mut args = env::args().skip(1);
     let mode = args
         .next()
-        .ok_or("usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]")?;
+        .ok_or("usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]|machine list|register DESTINATION RELEASE_TAG")?;
     let home = state_directory()?;
     match mode.as_str() {
+        "machine" => machine::run(&home, &args.collect::<Vec<_>>()),
         "supervisor" if args.len() == 0 => supervisor::run(&home),
         "ensure" if args.len() == 0 => ensure(&home),
         "request" => {
@@ -68,7 +70,7 @@ fn run() -> Result<()> {
             }
             Ok(())
         }
-        _ => Err("usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]".into()),
+        _ => Err("usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]|machine list|register DESTINATION RELEASE_TAG".into()),
     }
 }
 

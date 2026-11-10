@@ -24,6 +24,7 @@ main() {
     directory="${root}/bin/${tag}/${target}"
     binary="${directory}/tmux-agents"
     if [ -f "${binary}" ] && [ -x "${binary}" ] && [ ! -L "${binary}" ]; then
+        progress "Using installed supervisor ${tag} (${target}); no download needed."
         printf '%s\n' "${binary}"
         return
     fi
@@ -45,6 +46,7 @@ main() {
     asset="tmux-agents-${tag}-${target}"
     url="https://github.com/adonis0147/tmux-agents/releases/download/${tag}"
     printf 'tmux-agents: installing %s for %s\n' "${tag}" "${target}" >&2
+    progress 'Downloading checksum manifest...'
     download "${url}/SHA256SUMS" "${temporary}/checksum" 16384
     expected=$(awk -v asset="${asset}" '
         $2 == asset {
@@ -54,7 +56,9 @@ main() {
         }
         END { if (count == 1 && !invalid) print hash; else exit 1 }
     ' "${temporary}/checksum") || fail 'invalid or missing entry in release checksum manifest'
+    progress 'Downloading supervisor binary...'
     download "${url}/${asset}" "${temporary}/tmux-agents" 52428800
+    progress 'Verifying SHA-256 checksum...'
     if [ "${checksum}" = sha256sum ]; then
         actual=$(sha256sum "${temporary}/tmux-agents" | awk '{ print $1 }')
     else
@@ -64,6 +68,7 @@ main() {
     chmod 700 "${temporary}/tmux-agents"
     # Concurrent installers publish identical verified bytes; staging stays on the same filesystem.
     mv -f "${temporary}/tmux-agents" "${binary}"
+    progress 'Installation complete.'
     printf '%s\n' "${binary}"
 }
 
@@ -72,8 +77,18 @@ fail() {
     exit 1
 }
 
+progress() {
+    if [ "${TMUX_AGENTS_INSTALL_PROGRESS:-0}" = 1 ]; then
+        printf 'tmux-agents: %s\n' "${*}" >&2
+    fi
+}
+
 download() {
-    curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    progress_option=--silent
+    if [ "${TMUX_AGENTS_INSTALL_PROGRESS:-0}" = 1 ]; then
+        progress_option=--progress-bar
+    fi
+    curl --fail --location "${progress_option}" --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 \
         --connect-timeout 10 --max-time 120 --retry 2 --max-filesize "${3}" --output "${2}" "${1}" || fail "download failed: ${1}; check that the matching GitHub release has been published"
 }
 

@@ -24,7 +24,9 @@ Supported release targets:
 | Linux | x86_64 | `x86_64-unknown-linux-musl` | `ubuntu-24.04` |
 | Linux | aarch64 | `aarch64-unknown-linux-musl` | `ubuntu-24.04` |
 
-Linux releases use `cargo-zigbuild` with Zig's musl toolchain for both architectures, rather than a system musl compiler. Both Linux targets cross-build on the x86_64 runner. Zig is a build-time dependency only; users do not need it to install the plugin. Unsupported platforms require a source build and explicit override. tmux 3.8 or newer must still be installed separately. Automatic installation needs no Rust toolchain, sudo, or installation onto PATH, and does not install tmux or start the supervisor.
+Linux releases use `cargo-zigbuild` with Zig's musl toolchain for both architectures, rather than a system musl compiler. Both Linux targets cross-build on the x86_64 runner. Zig is a build-time dependency only; users do not need it to install the plugin. Unsupported platforms require a source build and explicit override. Local tmux 3.8 or newer must still be installed separately. Plugin-load installation needs no Rust toolchain, sudo, or installation onto PATH, and does not install tmux or start the supervisor.
+
+Explicit `tmux machine add HOST_OR_USER@HOST` also uses these four release targets and the shared installer, but installs under the remote `~/.local/share/tmux-agents` and ensures a remote supervisor is running (remote tmux minimum: 3.2). This is opt-in automatic setup, not remote workspace UI. See [remote setup](remote-setup.md) for authorization, private-directory requirements, SSH behavior, and registration.
 
 ### Downloads and verification
 
@@ -65,6 +67,8 @@ TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents sh scripts/install.sh
 ```
 
 The override returns the executable path without a download. It can also point to another trusted, locally provisioned executable for offline use.
+
+**Remote setup currently requires this new local source build.** Published `pre-0.1` lacks the `machine list`/`machine register` registry helpers used by the plugin. Update `TMUX_AGENTS_BIN` to the newly built executable and set it in the tmux server before loading, as below. The remote installer still uses the exact published tag in `RELEASE_TAG`; adding remote setup does not publish or change any GitHub release.
 
 The environment must exist in the **tmux server before the plugin loads**; exporting it in a pane does not update an already running server. For an existing server:
 
@@ -110,6 +114,7 @@ For the initial `pre-0.1` release, after committing the intended source and work
 ```sh
 cargo test
 cargo build --release
+python3 tests/remote.py -v
 python3 tests/installer.py -v
 python3 tests/integration.py -v
 git push -u origin HEAD
@@ -119,7 +124,7 @@ git push origin pre-0.1
 
 The workflow validates the tag against `RELEASE_TAG`, runs Rust unit tests (`cargo test --locked`) and offline installer tests on each runner, and builds release binaries for every target. Cross-compiled binaries are not runtime-tested by this workflow; the full tmux integration suite is a separate local check. Each build packages only `tmux-agents-${tag}-${target}`. The publish job generates one `SHA256SUMS` manifest covering all four binaries.
 
-Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Tags matching `pre-*` or `v*-*` publish with `--prerelease --latest=false`; stable `v*` releases use standard publishing. Check the Actions run and published assets before directing users to install. The initial `pre-0.1` release workflow passed for all four targets, and its published macOS Intel binary was downloaded, checksum-verified, and executed locally. Linux musl targets were also cross-built locally and confirmed as statically linked ELF executables. Linux runtime testing and testing on the minimum macOS versions remain pending.
+Only **after all four builds succeed** does the publish job download their artifacts and call `gh release create` with the raw binaries and checksum files, a verified tag, and generated release notes. Tags matching `pre-*` or `v*-*` publish with `--prerelease --latest=false`; stable `v*` releases use standard publishing. Check the Actions run and published assets before directing users to install. The initial `pre-0.1` release workflow passed for all four targets, and its published macOS Intel binary was downloaded, checksum-verified, and executed locally. Linux musl targets were also cross-built locally and confirmed as statically linked ELF executables. Fresh remote installation/startup and repeated setup were validated on Linux x86_64 with tmux 3.6, including the actual tmux popup. Other remote platforms and the minimum macOS versions remain untested.
 
 ## Upgrades and release immutability
 

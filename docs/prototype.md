@@ -1,11 +1,12 @@
-# Local prototype
+# Prototype architecture and usage
 
 ## Scope and components
 
-This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Release builds have passed on GitHub; Linux runtime behavior and the minimum macOS versions (Intel 10.12, Apple Silicon 11.0) remain unverified. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
+This Rust prototype manages local workspaces through an isolated tmux server. It requires Unix and separately installed tmux 3.8 or newer and is tested locally on macOS with tmux 3.8. Release builds have passed on GitHub, and remote installation/startup has been validated on Linux x86_64. Other remote platforms and the minimum macOS versions (Intel 10.12, Apple Silicon 11.0) remain unverified. See the [README](../README.md) for getting started and [installation and releases](releases.md) for installer behavior and publishing.
 
 - **Local plugin (`tmux-agents.tmux`)** exposes `tmux machine` commands and attachment bindings without changing the local tmux prefix.
-- **Short-lived CLI** sends requests to the supervisor over a private Unix socket.
+- **Short-lived CLI** sends requests to the local supervisor over a private Unix socket and maintains the local machine registry.
+- **Remote setup helper (`scripts/machine-add.sh`)** orchestrates explicit SSH installation/checking in a popup; it does not route workspace requests remotely.
 - **Supervisor** owns workspace operations and persistent metadata.
 - **Managed tmux server** uses a private socket and a dedicated configuration that ignores the user's tmux configuration. Its prefix is `C-a`.
 
@@ -21,12 +22,16 @@ After loading the plugin with `run-shell '/absolute/repo/tmux-agents.tmux'`:
 
 | Command | Purpose |
 | --- | --- |
-| `tmux machine start` | Ensure the supervisor is running. |
+| `tmux machine add HOST_OR_USER@HOST` | Automatically install/check a remote supervisor and register the destination. |
+| `tmux machine list` | List registered SSH destinations and release tags, not live status. |
+| `tmux machine start` | Ensure the local supervisor is running. |
 | `tmux machine status` | Show JSON status, including PID, instance identity, version, and capabilities. |
 | `tmux machine workspace create NAME [ABSOLUTE_DIR]` | Create a named workspace, optionally specifying its directory. |
 | `tmux machine workspace list` | List workspaces. |
 | `tmux machine workspace open NAME_OR_ID` | Resolve and attach to a workspace. |
 | `tmux machine picker` | Pick a workspace in a shell popup. |
+
+Remote setup requires a newly built local client and a tmux-server `TMUX_AGENTS_BIN` override; published `pre-0.1` lacks the registry CLI. See [remote setup](remote-setup.md) for the installation flow, SSH security, prerequisites, and failure behavior. `start`, `status`, `picker`, and `workspace.*` still operate locally. Remote hosts need tmux 3.2 or newer; the local client requirement remains 3.8.
 
 The local prefix followed by `M` invokes the same picker. It lists workspaces and reads a numeric selection; it is not a tmux choose-list UI.
 
@@ -61,6 +66,8 @@ tmux-agents request METHOD [ARGS...]
 
 `open` is a plugin operation, not a separate request method: it resolves a workspace and uses the returned socket and session to attach.
 
+`machine add` is also plugin orchestration, not a Rust CLI mode or supervisor request. After successful SSH and validated remote status, internal `tmux-agents machine register DEST TAG` atomically updates local `machines.json` under a lock. Internal `tmux-agents machine list` reads that registry without contacting remote hosts. See [registration and failures](remote-setup.md#registration-and-failures).
+
 The private Unix-socket protocol uses length-prefixed JSON, with a maximum message size of 64 KiB. Every request and response carries a protocol version and correlation ID. This internal framing is distinct from the CLI's JSON or tabular output. A `status` request provides the version/capability handshake:
 
 ```json
@@ -75,4 +82,4 @@ The supervisor and managed tmux server have separate lifetimes. Restarting the s
 
 The prototype is limited to 128 workspaces and serves one request at a time, with two-second socket I/O timeouts. Workspace definitions are saved before tmux starts; a launch failure retains a stopped definition. Stopped definitions are listed but cannot yet be restarted or deleted through the plugin. Arbitrary native renaming of managed tmux sessions is not supported.
 
-This prototype does not provide SSH, agent integrations, uploads, reboot layout restoration, or automatic recreation of local attachments. Managed configuration currently only sets the prefix; user configuration inclusion is deferred. It intentionally exposes no destructive workspace commands: the initial interface focuses on starting, discovering, creating, and opening workspaces without offering deletion or teardown operations.
+SSH is limited to explicit remote supervisor setup; remote workspace routing, attachment, and reconnect are not implemented. This prototype does not provide agent integrations, uploads, reboot layout restoration, or automatic recreation of local attachments. Managed configuration currently only sets the prefix; user configuration inclusion is deferred. It intentionally exposes no destructive workspace commands: the initial interface focuses on starting, discovering, creating, and opening workspaces without offering deletion or teardown operations.

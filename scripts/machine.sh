@@ -2,7 +2,7 @@
 set -eu
 
 fail() { printf 'tmux-agents: %s\n' "${*}" >&2; exit 1; }
-usage() { fail 'usage: tmux machine start|status|picker|workspace create NAME [ABSOLUTE_DIR]|workspace list|workspace open NAME_OR_ID'; }
+usage() { fail 'usage: tmux machine add HOST_OR_USER@HOST|list|start|status|picker|workspace create NAME [ABSOLUTE_DIR]|workspace list|workspace open NAME_OR_ID'; }
 
 binary=$(tmux show-option -gqv @tmux-agents-bin)
 TMUX_AGENTS_HOME=$(tmux show-option -gqv @tmux-agents-home)
@@ -31,6 +31,15 @@ open_workspace() {
 }
 
 case "${command}" in
+    add)
+        [ -n "${subcommand}" ] && [ -z "${name}${directory}" ] || usage
+        root=$(tmux show-option -gqv @tmux-agents-root)
+        tmux display-popup -EE -e "TMUX_AGENTS_BIN=${binary}" -e "TMUX_AGENTS_HOME=${TMUX_AGENTS_HOME}" sh "${root}/scripts/machine-add.sh" "${subcommand}"
+        ;;
+    list)
+        [ -z "${subcommand}${name}${directory}" ] || usage
+        "${binary}" machine list
+        ;;
     start)
         [ -z "${subcommand}${name}${directory}" ] || usage
         "${binary}" ensure
