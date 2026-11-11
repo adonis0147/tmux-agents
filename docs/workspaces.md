@@ -1,9 +1,10 @@
 # Local workspace behavior
 
-`tmux-agents` uses socket label `tmux-agents`. Its first session is named `main`;
-subsequent launches attach to the last session attached to or selected by a client.
+`tmux-agents` uses socket label `tmux-agents`. Its first session on each machine
+is named `main`; attachments resume that machine's last selected session.
 Native tmux commands can create and rename additional sessions. With multiple
 clients, the most recent attach or session switch determines the remembered session.
+The launcher also remembers the selected machine; see [switching](switching.md).
 
 The dedicated socket keeps application sessions separate from ordinary tmux
 sessions. Reserve this socket label for the application. Tmux still reads your

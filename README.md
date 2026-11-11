@@ -23,6 +23,31 @@ After a reboot or tmux server loss, saved sessions, windows, layouts, and workin
 directories reopen with fresh shells. The last-used session and active panes are
 restored; previous programs are **not** restarted.
 
-Remote machines are planned, not yet available.
+## Register a remote machine
 
-See [workspace behavior](docs/workspaces.md) for isolation, limitations, and tests.
+Install tmux 3.6+ and the current build of `tmux-agents` on both machines, then:
+
+```sh
+tmux-agents machine add user@host
+# Or use an existing SSH alias:
+tmux-agents machine add buildbox
+```
+
+Registration checks SSH connectivity and remote dependencies using your existing
+SSH configuration. It does not install software or open a remote workspace.
+
+## Switch workspaces
+
+Run `tmux-agents`, then press your tmux prefix followed by **uppercase `W`**
+(normally `Ctrl-b`, release, then `Shift-w`). This opens a native tmux menu:
+
+- Choose a registered machine to create, restore, or attach to its workspace over SSH.
+- Choose **Sessions on this machine** to open tmux's native session tree.
+- Choose **local** from a remote workspace to return without nesting tmux.
+
+Running programs survive switching. Detaching exits to your terminal; the next
+launch resumes the last selected machine, falling back locally if unavailable.
+There is still no startup menu.
+
+See [switching behavior](docs/switching.md), [remote registration](docs/machines.md),
+and [local restoration](docs/workspaces.md) for details and tests.

@@ -48,7 +48,7 @@ pub fn prepare(tmux: &Tmux) -> Result<(PathBuf, String), String> {
     Ok((directory, selected))
 }
 
-fn state_directory() -> Result<PathBuf, String> {
+pub fn state_directory() -> Result<PathBuf, String> {
     if let Some(base) = env::var_os("XDG_STATE_HOME").filter(|value| !value.is_empty()) {
         let base = PathBuf::from(base);
         if !base.is_absolute() {
