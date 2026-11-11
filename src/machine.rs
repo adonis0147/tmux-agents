@@ -11,16 +11,16 @@ use crate::{Result, atomic_write, protocol};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Registry {
+pub(crate) struct Registry {
     version: u32,
-    machines: Vec<Machine>,
+    pub(crate) machines: Vec<Machine>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Machine {
-    destination: String,
-    release_tag: String,
+pub(crate) struct Machine {
+    pub(crate) destination: String,
+    pub(crate) release_tag: String,
 }
 
 pub fn run(home: &Path, args: &[String]) -> Result<()> {
@@ -84,7 +84,11 @@ fn register(home: &Path, destination: &str, tag: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_destination(destination: &str) -> Result<()> {
+pub(crate) fn validate_destination(destination: &str) -> Result<()> {
+    if destination == "local" {
+        return Err("SSH destination local is reserved for this computer".into());
+    }
+
     if destination.is_empty()
         || destination.len() > 255
         || destination.starts_with('-')
@@ -102,7 +106,7 @@ fn validate_destination(destination: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_tag(tag: &str) -> Result<()> {
+pub(crate) fn validate_tag(tag: &str) -> Result<()> {
     if tag.is_empty()
         || tag.len() > 128
         || !tag.as_bytes()[0].is_ascii_alphanumeric()
@@ -116,7 +120,7 @@ fn validate_tag(tag: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_status(status: &Value) -> Result<()> {
+pub(crate) fn validate_status(status: &Value) -> Result<()> {
     if status["protocol"].as_u64() != Some(protocol::VERSION as u64) {
         return Err("remote supervisor protocol is incompatible".into());
     }
@@ -134,7 +138,14 @@ fn validate_status(status: &Value) -> Result<()> {
     let capabilities = status["capabilities"]
         .as_array()
         .ok_or("remote supervisor is missing capabilities")?;
-    for required in ["workspace.list", "workspace.create", "workspace.resolve"] {
+    for required in [
+        "workspace.list",
+        "workspace.create",
+        "workspace.resolve",
+        "state.snapshot",
+        "workspace.snapshot",
+        "workspace.restore",
+    ] {
         if !capabilities
             .iter()
             .any(|capability| capability.as_str() == Some(required))
@@ -146,7 +157,7 @@ fn validate_status(status: &Value) -> Result<()> {
     Ok(())
 }
 
-fn load(home: &Path) -> Result<Registry> {
+pub(crate) fn load(home: &Path) -> Result<Registry> {
     let registry: Registry = match fs::read(home.join("machines.json")) {
         Ok(bytes) => serde_json::from_slice(&bytes)?,
         Err(error) if error.kind() == io::ErrorKind::NotFound => Registry {
@@ -219,7 +230,8 @@ mod tests {
             "protocol": 1,
             "instance": "0123456789abcdef0123456789abcdef",
             "pid": 42,
-            "capabilities": ["workspace.list", "workspace.create", "workspace.resolve"]
+            "capabilities": ["workspace.list", "workspace.create", "workspace.resolve",
+                "state.snapshot", "workspace.snapshot", "workspace.restore"]
         });
         assert!(validate_status(&valid).is_ok());
 

@@ -9,68 +9,116 @@ main() {
     [[ -f "${binary}" && -x "${binary}" ]] ||
         fail "executable missing; reload tmux-agents.tmux to install it (${binary})"
 
-    # Alias templates supply empty strings for omitted parameters.
+    socket=$(tmux display-message -p '#{socket_path}')
     command=${1:-}
-    subcommand=${2:-}
-    name=${3:-}
-    directory=${4:-}
+    shift
 
+    # Alias templates supply empty strings for omitted parameters, including the guard.
     [[ -z "${5:-}" ]] || usage
 
     case "${command}" in
         add)
-            [[ -n "${subcommand}" && -z "${name}${directory}" ]] || usage
+            [[ -n "${1:-}" && -z "${2:-}${3:-}${4:-}" ]] || usage
 
             root=$(tmux show-option -gqv @tmux-agents-root)
             tmux display-popup -EE -e "TMUX_AGENTS_BIN=${binary}" -e "TMUX_AGENTS_HOME=${TMUX_AGENTS_HOME}" \
-                bash "${root}/scripts/machine-add.sh" "${subcommand}"
+                bash "${root}/scripts/machine-add.sh" "${1}"
             ;;
         list)
-            [[ -z "${subcommand}${name}${directory}" ]] || usage
+            [[ -z "${1:-}${2:-}${3:-}${4:-}" ]] || usage
 
-            "${binary}" machine list
+            ensure_client
+            "${binary}" client machines "${socket}"
             ;;
         start)
-            [[ -z "${subcommand}${name}${directory}" ]] || usage
+            [[ -z "${1:-}${2:-}${3:-}${4:-}" ]] || usage
 
             "${binary}" ensure
-            printf 'tmux-agents supervisor is ready\n'
+            ensure_client
+            printf 'tmux-agents supervisor and client are ready\n'
             ;;
         status)
-            [[ -z "${subcommand}${name}${directory}" ]] || usage
+            [[ -z "${2:-}${3:-}${4:-}" ]] || usage
 
-            "${binary}" request status
+            ensure_client
+            if [[ -n "${1:-}" ]]; then
+                "${binary}" client status "${socket}" "${1}"
+            else
+                "${binary}" client status "${socket}"
+            fi
+            ;;
+        connect)
+            [[ -n "${1:-}" && -z "${2:-}${3:-}${4:-}" ]] || usage
+
+            ensure_client
+            tmux display-popup -EE -e "TMUX_AGENTS_BIN=${binary}" -e "TMUX_AGENTS_HOME=${TMUX_AGENTS_HOME}" \
+                "${binary}" client connect "${socket}" "${1}"
             ;;
         workspace)
-            case "${subcommand}" in
-                create)
-                    [[ -n "${name}" ]] || usage
-                    [[ -n "${directory}" ]] || directory=$(tmux display-message -p '#{pane_current_path}')
-
-                    "${binary}" ensure
-                    "${binary}" request workspace.create "${name}" "${directory}"
-                    ;;
-                list)
-                    [[ -z "${name}${directory}" ]] || usage
-
-                    "${binary}" ensure
-                    "${binary}" request workspace.list
-                    ;;
-                open)
-                    [[ -n "${name}" && -z "${directory}" ]] || usage
-
-                    "${binary}" ensure
-                    open_workspace "${name}"
-                    ;;
-                *) usage ;;
-            esac
+            workspace "${@}"
             ;;
         picker)
-            [[ -z "${subcommand}${name}${directory}" ]] || usage
+            [[ -z "${1:-}${2:-}${3:-}${4:-}" ]] || usage
 
-            # The popup is another invocation of this plugin client, not a daemon.
             root=$(tmux show-option -gqv @tmux-agents-root)
             tmux display-popup -E bash "${root}/scripts/picker.sh"
+            ;;
+        *) usage ;;
+    esac
+}
+
+ensure_client() {
+    # Startup is silent even when an installer-test binary writes a marker to stdout.
+    "${binary}" client ensure "${socket}" >/dev/null
+}
+
+workspace() {
+    local host method reference directory
+
+    host=local
+    case "${1:-}" in
+        list|create|open|snapshot|restore) ;;
+        *)
+            host=${1:-}
+            [[ -n "${host}" ]] || usage
+            shift
+            ;;
+    esac
+
+    method=${1:-}
+    reference=${2:-}
+    directory=${3:-}
+    [[ -z "${4:-}" ]] || usage
+
+    case "${method}" in
+        list)
+            [[ -z "${reference}${directory}" ]] || usage
+
+            ensure_client
+            "${binary}" client request "${socket}" "${host}" workspace.list
+            ;;
+        create)
+            [[ -n "${reference}" ]] || usage
+            if [[ -z "${directory}" && "${host}" == local ]]; then
+                directory=$(tmux display-message -p '#{pane_current_path}')
+            fi
+
+            ensure_client
+            if [[ -n "${directory}" ]]; then
+                "${binary}" client request "${socket}" "${host}" workspace.create "${reference}" "${directory}"
+            else
+                "${binary}" client request "${socket}" "${host}" workspace.create "${reference}"
+            fi
+            ;;
+        open|snapshot|restore)
+            [[ -n "${reference}" && -z "${directory}" ]] || usage
+
+            ensure_client
+            if [[ "${method}" == open ]]; then
+                "${binary}" client open "${socket}" "${host}" "${reference}"
+            else
+                "${binary}" client request "${socket}" "${host}" "workspace.${method}" "${reference}"
+            fi
             ;;
         *) usage ;;
     esac
@@ -82,32 +130,10 @@ fail() {
 }
 
 usage() {
-    local message='usage: tmux machine add HOST_OR_USER@HOST|list|start|status|picker|'
-    message+='workspace create NAME [ABSOLUTE_DIR]|workspace list|workspace open NAME_OR_ID'
+    local message='usage: tmux machine add HOST|list|start|status [HOST]|connect HOST|picker|'
+    message+='workspace [HOST] list|create NAME [DIR]|open REF|snapshot REF|restore REF'
 
     fail "${message}"
-}
-
-open_workspace() {
-    local target socket session id window
-
-    target=$("${binary}" request workspace.resolve "${1}") || exit 1
-    socket=$(printf '%s\n' "${target}" | awk 'NR == 1')
-    session=$(printf '%s\n' "${target}" | awk 'NR == 2')
-    id=$(printf '%s\n' "${target}" | awk 'NR == 3')
-
-    window=$(tmux list-windows -F '#{window_id} #{@tmux-agents-workspace}' |
-        awk -v id="${id}" '$2 == id && !found { print $1; found = 1 }')
-
-    if [[ -n "${window}" ]]; then
-        tmux select-window -t "${window}"
-        return
-    fi
-
-    # Multiple new-window arguments execute directly, without a shell string.
-    window=$(tmux new-window -P -F '#{window_id}' -n "workspace:${1}" \
-        env -u TMUX tmux -S "${socket}" attach-session -t "=${session}")
-    tmux set-option -w -t "${window}" @tmux-agents-workspace "${id}"
 }
 
 [[ "${#}" -gt 0 ]] || usage

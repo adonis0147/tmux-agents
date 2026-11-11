@@ -35,7 +35,8 @@ class RemoteSetup(unittest.TestCase):
             "protocol": 1,
             "instance": "0123456789abcdef0123456789abcdef",
             "pid": 42,
-            "capabilities": ["workspace.list", "workspace.create", "workspace.resolve"],
+            "capabilities": ["workspace.list", "workspace.create", "workspace.resolve",
+                             "state.snapshot", "workspace.snapshot", "workspace.restore"],
         }
 
         payload = b"""#!/usr/bin/env bash
@@ -59,6 +60,8 @@ esac
             TEST_ARCH="x86_64",
             EXPECTED_TARGET="x86_64-unknown-linux-musl",
         )
+
+        self.env.pop("TMUX", None)
 
         self.fixture.make_tool(
             "tmux",

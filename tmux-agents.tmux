@@ -40,8 +40,15 @@ if ! binary=$(bash "${root}/scripts/install.sh"); then
 fi
 
 tmux set-option -g @tmux-agents-bin "${binary}"
-tmux set-option -s 'command-alias[tmux-agents-machine]' \
-    'machine=run-shell -E "bash #{q:@tmux-agents-root}/scripts/machine.sh #{q:1} #{q:2} #{q:3} #{q:4} #{q:5}"'
+socket=$(tmux display-message -p '#{socket_path}')
+tmux set-option -g @tmux-agents-socket "${socket}"
 
-tmux bind-key M run-shell -E 'bash #{q:@tmux-agents-root}/scripts/machine.sh picker'
-tmux bind-key a if-shell -F '#{!=:#{@tmux-agents-workspace},}' 'send-keys C-a' 'send-prefix'
+# The helper belongs to this local tmux server, not to a system service.
+if ! "${binary}" client ensure "${socket}" >/dev/null; then
+    tmux display-message 'tmux-agents: client startup failed; check the binary version and state directory'
+    exit 1
+fi
+
+alias_command='machine=run-shell -E "bash #{q:@tmux-agents-root}/scripts/machine.sh'
+alias_command+=' #{q:1} #{q:2} #{q:3} #{q:4} #{q:5} #{q:6}"'
+tmux set-option -s 'command-alias[tmux-agents-machine]' "${alias_command}"

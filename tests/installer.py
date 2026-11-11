@@ -233,11 +233,15 @@ if sys.argv[1:] == ['-V']:
     def test_shasum_fallback(self):
         portable = self.root / "portable tools"
         portable.mkdir()
-        for command in ["bash", "awk", "grep", "dirname", "mkdir", "mktemp", "chmod", "mv", "rm", "shasum"]:
+        for command in ["bash", "awk", "grep", "dirname", "mkdir", "mktemp", "chmod", "mv", "rm"]:
             executable = shutil.which(command)
             self.assertIsNotNone(executable, f"test prerequisite: {command}")
             (portable / command).symlink_to(executable)
 
+        shasum = shutil.which("shasum")
+        self.assertIsNotNone(shasum, "test prerequisite: shasum")
+        # Apple's version-selecting wrapper needs its original argv[0] to find companion scripts.
+        self.make_tool("shasum", f"import os, sys\nos.execv({shasum!r}, [{shasum!r}, *sys.argv[1:]])")
         result = self.install(PATH=f"{self.tools}:{portable}")
 
         self.assertEqual(result.stdout.strip(), str(self.binary()))
@@ -291,7 +295,8 @@ if sys.argv[1:] == ['-V']:
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = [json.loads(line) for line in (self.root / "tmux-calls").read_text().splitlines()]
         self.assertIn(["set-option", "-g", "@tmux-agents-bin", str(self.binary())], calls)
-        self.assertTrue(any(call[0] == "bind-key" for call in calls))
+        self.assertFalse(any(call[0] == "bind-key" for call in calls))
+        self.assertTrue(any(call[:2] == ["set-option", "-s"] for call in calls))
         self.assertEqual(self.binary().read_bytes(), self.payload)
 
     def test_failed_install_does_not_register_client(self):

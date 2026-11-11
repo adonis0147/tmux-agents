@@ -1,6 +1,10 @@
+mod attachment;
+mod client;
 mod machine;
 mod protocol;
+mod recovery;
 mod supervisor;
+mod transport;
 
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -25,13 +29,21 @@ fn main() {
 
 fn run() -> Result<()> {
     let mut args = env::args().skip(1);
-    let mode = args.next().ok_or(concat!(
-        "usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]|",
-        "machine list|register DESTINATION RELEASE_TAG"
-    ))?;
+    let mode = args.next().ok_or(
+        "usage: tmux-agents supervisor|ensure|request|machine|client|bridge|terminal|attach",
+    )?;
     let home = state_directory()?;
 
     match mode.as_str() {
+        "client" => runtime()?.block_on(client::cli(&home, &args.collect::<Vec<_>>())),
+        "bridge" if args.len() == 0 => transport::bridge(&home),
+        "terminal" if args.len() == 1 => transport::terminal(&home, &args.next().unwrap()),
+        "attach" if args.len() == 3 => {
+            let socket = args.next().unwrap();
+            let host = args.next().unwrap();
+            let id = args.next().unwrap();
+            runtime()?.block_on(attachment::run(&home, Path::new(&socket), &host, &id))
+        }
         "machine" => machine::run(&home, &args.collect::<Vec<_>>()),
         "supervisor" if args.len() == 0 => supervisor::run(&home),
         "ensure" if args.len() == 0 => ensure(&home),
@@ -39,47 +51,52 @@ fn run() -> Result<()> {
             let method = args.next().ok_or("request requires a method")?;
             let response = request(&home, &method, args.collect())?;
 
-            match method.as_str() {
-                "workspace.list" => {
-                    for workspace in response.result.as_array().ok_or("invalid workspace list")? {
-                        println!(
-                            "{}\t{}\t{}",
-                            workspace["id"].as_str().unwrap_or(""),
-                            workspace["name"].as_str().unwrap_or(""),
-                            if workspace["running"] == true {
-                                "running"
-                            } else {
-                                "stopped"
-                            }
-                        );
-                    }
-                }
-                "workspace.resolve" => {
-                    println!(
-                        "{}\n{}\n{}",
-                        response.result["socket"].as_str().ok_or("missing socket")?,
-                        response.result["session"]
-                            .as_str()
-                            .ok_or("missing session")?,
-                        response.result["id"].as_str().ok_or("missing id")?
-                    );
-                }
-                "workspace.create" => println!(
-                    "{}\t{}",
-                    response.result["id"].as_str().ok_or("missing id")?,
-                    response.result["name"].as_str().ok_or("missing name")?
-                ),
-                _ => println!("{}", response.result),
-            }
-
-            Ok(())
+            print_result(&method, &response.result)
         }
-        _ => Err(concat!(
-            "usage: tmux-agents supervisor|ensure|request METHOD [ARGS...]|",
-            "machine list|register DESTINATION RELEASE_TAG"
-        )
-        .into()),
+        _ => Err(
+            "usage: tmux-agents supervisor|ensure|request|machine|client|bridge|terminal|attach"
+                .into(),
+        ),
     }
+}
+
+fn runtime() -> Result<tokio::runtime::Runtime> {
+    Ok(tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?)
+}
+
+fn print_result(method: &str, result: &serde_json::Value) -> Result<()> {
+    match method {
+        "workspace.list" => {
+            for workspace in result.as_array().ok_or("invalid workspace list")? {
+                println!(
+                    "{}\t{}\t{}",
+                    workspace["id"].as_str().ok_or("missing id")?,
+                    workspace["name"].as_str().ok_or("missing name")?,
+                    if workspace["running"] == true {
+                        "running"
+                    } else {
+                        "stopped"
+                    }
+                );
+            }
+        }
+        "workspace.resolve" => println!(
+            "{}\n{}\n{}",
+            result["socket"].as_str().ok_or("missing socket")?,
+            result["session"].as_str().ok_or("missing session")?,
+            result["id"].as_str().ok_or("missing id")?
+        ),
+        "workspace.create" => println!(
+            "{}\t{}",
+            result["id"].as_str().ok_or("missing id")?,
+            result["name"].as_str().ok_or("missing name")?
+        ),
+        _ => println!("{result}"),
+    }
+
+    Ok(())
 }
 
 fn ensure(home: &Path) -> Result<()> {
@@ -204,8 +221,8 @@ fn state_directory() -> Result<PathBuf> {
 
     let path = fs::canonicalize(path)?;
     let text = path.to_str().ok_or("state directory must be UTF-8")?;
-    if text.chars().any(char::is_control) {
-        return Err("state directory cannot contain control characters".into());
+    if text.chars().any(char::is_control) || text.ends_with(';') {
+        return Err("state directory cannot contain controls or end with a semicolon".into());
     }
 
     if path.as_os_str().len() > 85 {

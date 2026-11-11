@@ -32,13 +32,22 @@ class Prototype(unittest.TestCase):
         self.start_supervisor()
 
     def tearDown(self):
+        self.tmux("local.sock", "kill-server", check=False)
+        deadline = time.monotonic() + 6
+        while time.monotonic() < deadline and any(
+            len(path.name) == 17 and path.is_socket() for path in self.home.glob("c*")
+        ):
+            time.sleep(0.1)
+
         if self.supervisor and self.supervisor.poll() is None:
             self.supervisor.terminate()
             self.supervisor.wait(timeout=5)
 
-        for name in ["local.sock", "tmux.sock"]:
-            self.tmux(name, "kill-server", check=False)
+        status = self.cli("request", "status", check=False)
+        if status.returncode == 0:
+            os.kill(json.loads(status.stdout)["pid"], signal.SIGTERM)
 
+        self.tmux("tmux.sock", "kill-server", check=False)
         self.temporary.cleanup()
 
     def start_supervisor(self):
@@ -95,6 +104,8 @@ class Prototype(unittest.TestCase):
 
     def load_plugin(self):
         self.tmux("local.sock", "-f", "/dev/null", "new-session", "-d", "-s", "local")
+        self.tmux("local.sock", "bind-key", "M", "display-message", "custom-M")
+        self.tmux("local.sock", "bind-key", "a", "display-message", "custom-a")
         for key in ["TMUX_AGENTS_HOME", "TMUX_AGENTS_BIN"]:
             self.tmux("local.sock", "set-environment", "-g", key, self.env[key])
 
@@ -157,12 +168,19 @@ class Prototype(unittest.TestCase):
 
         self.tmux("tmux.sock", "kill-server")
 
-        self.assertIn("stopped", self.cli("request", "workspace.list").stdout)
-        self.assertNotEqual(self.cli("request", "workspace.resolve", workspace_id, check=False).returncode, 0)
+        restored = json.loads(self.cli("request", "workspace.restore", workspace_id).stdout)
+        self.assertEqual(restored["id"], workspace_id)
+        self.assertIn("running", self.cli("request", "workspace.list").stdout)
+        self.assertNotEqual(self.tmux("tmux.sock", "list-panes", "-a", "-F", "#{pane_pid}").stdout, before)
 
     def test_alias_quoting_and_attachment(self):
         self.load_plugin()
         self.assertEqual(self.tmux("local.sock", "show-option", "-gv", "prefix").stdout.strip(), "C-b")
+        socket_alias = self.home / "socket-link"
+        socket_alias.symlink_to(self.home / "local.sock")
+        self.cli("client", "ensure", str(socket_alias))
+        self.assertEqual(len([path for path in self.home.glob("c*")
+                              if len(path.name) == 17 and path.is_socket()]), 1)
 
         self.tmux("local.sock", "machine", "start")
         marker = self.home / "INJECTED"
@@ -203,6 +221,11 @@ class Prototype(unittest.TestCase):
         self.assertEqual(
             self.tmux("local.sock", "show-option", "-sqv", "command-alias[tmux-agents-machine]").stdout.strip(), ""
         )
+
+    def test_existing_prefix_bindings_are_preserved(self):
+        self.load_plugin()
+        self.assertIn("custom-M", self.tmux("local.sock", "list-keys", "-T", "prefix", "M").stdout)
+        self.assertIn("custom-a", self.tmux("local.sock", "list-keys", "-T", "prefix", "a").stdout)
 
     def test_uncertain_creation_is_not_replayed(self):
         self.supervisor.terminate()
@@ -265,6 +288,10 @@ class Prototype(unittest.TestCase):
 
     def test_interactive_picker_and_prefix(self):
         self.load_plugin()
+        self.tmux("local.sock", "bind-key", "M", "run-shell", "-E",
+                  "bash #{q:@tmux-agents-root}/scripts/machine.sh picker")
+        self.tmux("local.sock", "bind-key", "a", "if-shell", "-F", "#{!=:#{@tmux-agents-workspace},}",
+                  "send-keys C-a", "send-prefix")
         self.cli("request", "workspace.create", "interactive", "/tmp")
 
         pid, terminal = pty.fork()

@@ -69,6 +69,12 @@ main() {
     printf '[5/5] Verifying status and registering machine locally...\n' >&2
     "${binary}" machine register "${destination}" "${tag}" < "${temporary}/setup.out"
 
+    if [[ -n "${TMUX:-}" ]]; then
+        socket=$(tmux display-message -p '#{socket_path}')
+        printf 'Connecting the management channel...\n' >&2
+        "${binary}" client connect "${socket}" "${destination}"
+    fi
+
     if [[ -t 0 ]]; then
         printf '\nSetup complete. Press Enter to close. ' >&2
         read -r _ignored || true

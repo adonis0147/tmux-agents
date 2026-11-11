@@ -1,58 +1,73 @@
 # tmux-agents
 
-A Rust local prototype for managing workspaces in a dedicated tmux server from your existing tmux session. Your local server keeps its configuration; managed workspaces use a separate configuration and `C-a` prefix.
+Manage local and SSH-hosted workspaces from your existing tmux session. Managed workspaces use a separate tmux
+server and `C-a` prefix; your local server keeps its configuration. A small popup picker shows machines,
+connection health, and workspace window/pane counts. There is no permanent panel.
 
-Requires Unix, **Bash 3.2 or newer**, and **tmux 3.8 or newer**, installed separately. macOS binaries target Intel 10.12+ and Apple Silicon 11.0+. Tested locally on macOS with tmux 3.8 and for remote installation/startup on Linux x86_64 with tmux 3.6. Release builds have passed on GitHub; older macOS runtime behavior remains unverified.
+Requires Unix, Bash **3.2+**, and local tmux **3.8+** (remote tmux **3.2+**).
 
 ## Get started
 
-Clone the public repository:
+Clone the repository:
 
 ```sh
 git clone https://github.com/adonis0147/tmux-agents.git ~/.tmux/plugins/tmux-agents
 ```
 
-Add this to your local `~/.tmux.conf`:
+Add to `~/.tmux.conf`:
 
 ```tmux
 run-shell '~/.tmux/plugins/tmux-agents/tmux-agents.tmux'
 ```
 
-Alternatively, with [TPM](https://github.com/tmux-plugins/tpm), add `set -g @plugin 'adonis0147/tmux-agents'` before TPM's initialization and install plugins normally. The standard `tmux-agents.tmux` entry point is supported.
+TPM users can instead add `set -g @plugin 'adonis0147/tmux-agents'` before TPM initialization.
 
-For an already running local server, load it with:
+**This checkout requires newly built client AND server binaries.** Published `pre-0.1` does not implement
+its bridge/recovery protocol. The pinned installer cannot supply these features yet. Build from source and
+set the override in the tmux server **before loading**:
 
 ```sh
-tmux run-shell "${HOME}/.tmux/plugins/tmux-agents/tmux-agents.tmux"
+cargo build --release
+tmux set-environment -g TMUX_AGENTS_BIN "${PWD}/target/release/tmux-agents"
+tmux run-shell "${PWD}/tmux-agents.tmux"
 ```
 
-On loading, the plugin automatically installs the exact release tag in the root `RELEASE_TAG` file (currently `pre-0.1`) for macOS or Linux on x86_64 or aarch64. Downloads require `curl` and either `sha256sum` or `shasum`; an existing installed executable works offline. No Rust, sudo, or PATH installation is needed. Loading the plugin does not start the supervisor or install tmux.
-
-**The exact `pre-0.1` GitHub release must be published before automatic installation works.** A checkout whose `RELEASE_TAG` is not yet published may fail to install; use a checkout pointing to a published release or the [source/offline override](docs/releases.md#source-builds-and-offline-overrides). See [installation and releases](docs/releases.md) for supported targets, diagnostics, upgrades, and publishing.
-
-`TMUX_AGENTS_HOME` selects an absolute, private state directory; its default is `$HOME/.local/state/tmux-agents`.
-
-From a shell in your local tmux session:
+Provision the matching server binary on remote hosts as well; do not use the old published server for these
+features. See [installation and releases](docs/releases.md) and [remote setup](docs/remote-setup.md).
+Loading starts/reuses a detached Rust helper scoped to your local tmux server, not a standalone system service.
+`TMUX_AGENTS_HOME` selects private state (default `$HOME/.local/state/tmux-agents`).
 
 ```sh
 tmux machine start
-tmux machine status
 tmux machine workspace create demo /absolute/project/directory
-tmux machine workspace list
 tmux machine workspace open demo
+tmux machine list
+tmux machine status
 ```
 
-The directory is optional when creating a workspace. Open accepts a workspace name or stable ID. Use your local **prefix, then `M`** (or `tmux machine picker`) to open a shell popup that lists workspaces and reads a numeric selection.
+Local commands retain their implicit-local syntax. Remote commands put the host before the operation:
 
-Managed tmux uses `C-a`. While attached to a managed workspace, your local **prefix, then `a`** forwards `C-a` to it; your local prefix itself is unchanged. The plugin replaces existing prefix bindings on `M` and `a`.
+```sh
+tmux machine add user@server
+tmux machine connect user@server
+tmux machine workspace user@server list
+tmux machine workspace user@server create demo /remote/project
+tmux machine workspace user@server open demo
+tmux machine status user@server
+```
 
-### Explicit remote setup
+Use `tmux machine picker` for the numeric picker. The plugin does not replace any key bindings;
+optional shortcuts are shown in the [command guide](docs/prototype.md#optional-key-bindings).
+Open accepts names or stable IDs; the picker opens by stable ID.
 
-`tmux machine add HOST_OR_USER@HOST` checks the remote supervisor over SSH, asks for installation approval only if it is missing, and otherwise continues directly with progress displayed; `tmux machine list` lists registrations, not live status. **Build the new local client and update `TMUX_AGENTS_BIN` in the tmux server before loading the plugin**: published `pre-0.1` lacks the required registry CLI. See [remote setup](docs/remote-setup.md) for commands, prerequisites, security, and failure behavior.
+Connections reconnect automatically with cached, visibly stale workspace rows during outages. Stale operations
+are disabled; mutations with lost responses are never replayed. `machine connect HOST` exposes native SSH
+authentication in a popup. See [commands and architecture](docs/prototype.md),
+[SSH setup/security](docs/remote-setup.md), and [recovery and limitations](docs/recovery.md).
 
-Remote setup is not remote workspace UI: all workspace commands, `start`, `status`, and the picker remain local. There is no remote routing, attachment, reconnect, agent execution, uploads, or reboot layout restoration. Restarting the supervisor leaves managed tmux running, but does not promise to recreate local attachments. Destructive workspace commands are intentionally absent.
+This is a workspace prototype, not an agent integration, upload tool, sidebar, or exact Herdr replica.
 
-Run the checks from a source checkout with Rust/Cargo and Python 3 installed:
+## Development checks
 
 ```sh
 cargo test
@@ -60,8 +75,10 @@ cargo build --release
 python3 tests/remote.py -v
 python3 tests/installer.py -v
 python3 tests/integration.py -v
+python3 tests/transport.py -v
+python3 tests/recovery.py -v
+python3 tests/control.py -v
 ```
 
-Integration tests use isolated state directories, tmux servers, and a pseudoterminal; Python 3 is only needed for these tests.
-
-See [prototype architecture and usage](docs/prototype.md) for lifecycle, transport, and persistence details.
+Tests use isolated state/tmux servers and pseudoterminals. These commands are not a claim of live SSH validation
+for the bridge/recovery implementation. No release is published by this change.

@@ -8,7 +8,7 @@ use crate::Result;
 pub const VERSION: u32 = 1;
 pub const MAX_MESSAGE: usize = 64 * 1024;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub version: u32,
@@ -50,6 +50,40 @@ pub fn write(writer: &mut impl Write, message: &impl Serialize) -> Result<()> {
     writer.write_all(&(bytes.len() as u32).to_be_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()?;
+
+    Ok(())
+}
+
+pub async fn read_async<T: DeserializeOwned>(
+    reader: &mut (impl tokio::io::AsyncRead + Unpin),
+) -> Result<T> {
+    use tokio::io::AsyncReadExt;
+
+    let size = reader.read_u32().await? as usize;
+    if size == 0 || size > MAX_MESSAGE {
+        return Err("invalid message size".into());
+    }
+
+    let mut bytes = vec![0; size];
+    reader.read_exact(&mut bytes).await?;
+
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+pub async fn write_async(
+    writer: &mut (impl tokio::io::AsyncWrite + Unpin),
+    message: &impl Serialize,
+) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
+
+    let bytes = serde_json::to_vec(message)?;
+    if bytes.len() > MAX_MESSAGE {
+        return Err("message exceeds 64 KiB".into());
+    }
+
+    writer.write_u32(bytes.len() as u32).await?;
+    writer.write_all(&bytes).await?;
+    writer.flush().await?;
 
     Ok(())
 }

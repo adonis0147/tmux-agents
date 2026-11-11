@@ -24,9 +24,10 @@ Supported release targets:
 | Linux | x86_64 | `x86_64-unknown-linux-musl` | `ubuntu-24.04` |
 | Linux | aarch64 | `aarch64-unknown-linux-musl` | `ubuntu-24.04` |
 
-Linux releases use `cargo-zigbuild` with Zig's musl toolchain for both architectures, rather than a system musl compiler. Both Linux targets cross-build on the x86_64 runner. Zig is a build-time dependency only; users do not need it to install the plugin. Unsupported platforms require a source build and explicit override. Local tmux 3.8 or newer must still be installed separately. Plugin-load installation needs no Rust toolchain, sudo, or installation onto PATH, and does not install tmux or start the supervisor.
+Linux releases use `cargo-zigbuild` with Zig's musl toolchain for both architectures, rather than a system musl compiler. Both Linux targets cross-build on the x86_64 runner. Zig is a build-time dependency only; users do not need it to install the plugin. Unsupported platforms require a source build and explicit override. Local tmux 3.8 or newer must still be installed separately. Plugin-load installation needs no Rust toolchain, sudo, or installation onto PATH and does not install tmux.
+After installation the plugin starts/reuses its per-local-tmux client helper, not a system service.
 
-Explicit `tmux machine add HOST_OR_USER@HOST` also uses these four release targets and the shared installer, but installs under the remote `~/.local/share/tmux-agents` and ensures a remote supervisor is running (remote tmux minimum: 3.2). This is opt-in automatic setup, not remote workspace UI. See [remote setup](remote-setup.md) for authorization, private-directory requirements, SSH behavior, and registration.
+Explicit `tmux machine add HOST_OR_USER@HOST` also uses these four release targets and the shared installer, but installs under the remote `~/.local/share/tmux-agents` and ensures a remote supervisor is running (remote tmux minimum: 3.2). This is opt-in setup; the client helper subsequently provides remote workspace routing and attachments. See [remote setup](remote-setup.md) for authorization, private-directory requirements, SSH behavior, and registration.
 
 ### Downloads and verification
 
@@ -68,7 +69,10 @@ TMUX_AGENTS_BIN=/absolute/repo/target/release/tmux-agents bash scripts/install.s
 
 The override returns the executable path without a download. It can also point to another trusted, locally provisioned executable for offline use.
 
-**Remote setup currently requires this new local source build.** Published `pre-0.1` lacks the `machine list`/`machine register` registry helpers used by the plugin. Update `TMUX_AGENTS_BIN` to the newly built executable and set it in the tmux server before loading, as below. The remote installer still uses the exact published tag in `RELEASE_TAG`; adding remote setup does not publish or change any GitHub release.
+**Bridge/recovery requires new client AND server source builds.** Published `pre-0.1` lacks the required
+bridge/recovery protocol. Set `TMUX_AGENTS_BIN` to the new local executable before loading, and provision a
+matching server on each remote host. The remote installer still pins `RELEASE_TAG`; it cannot supply these
+features from the old release. This change does not publish or modify a release.
 
 The environment must exist in the **tmux server before the plugin loads**; exporting it in a pane does not update an already running server. For an existing server:
 
@@ -130,6 +134,7 @@ Only **after all four builds succeed** does the publish job download their artif
 
 Treat published releases as immutable: do not replace binaries or move released tags. For future releases, update `RELEASE_TAG` to a new `pre-*` or `v*` tag, commit the changes, and push that exact tag. Optionally bump the semantic package version in both `Cargo.toml` and `Cargo.lock` when appropriate; release tags need not equal `v` plus that version. The installer pins to the checkout's `RELEASE_TAG`, not the newest GitHub release. Update the plugin checkout and reload it to install that release.
 
-The `pre-0.1` release is being replaced once at the maintainer's explicit request to align macOS minimums and consolidate checksums. Existing cached executables are not automatically refreshed after an overwrite: remove only `<plugin>/bin/pre-0.1/<target>/tmux-agents` and reload the plugin to download the replacement. Do not remove workspace state.
+Do not overwrite `pre-0.1` to distribute bridge/recovery. Use compatible source builds until a new release is
+explicitly prepared and published. Existing cached executables are not automatically refreshed. Preserve workspace state.
 
 Installation never restarts a running supervisor. A newer CLI does not automatically replace the service; protocol upgrades and any required migration are manual. See [lifecycle and limits](prototype.md#lifecycle-and-limits) before planning an upgrade.
